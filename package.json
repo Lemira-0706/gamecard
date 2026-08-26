@@ -1,0 +1,27 @@
+{
+  "name": "plane-narrative-game",
+  "version": "1.0.0",
+  "description": "位面 · 互动叙事游戏应用（本地优先 / API 驱动）",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.local.planegame",
+    "productName": "位面",
+    "directories": { "output": "dist" },
+    "files": ["index.html", "styles.css", "data.js", "app.js", "main.js"],
+    "win": { "target": "nsis", "icon": null },
+    "mac": { "target": "dmg" },
+    "linux": { "target": "AppImage" }
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.0.0"
+  }
+}
