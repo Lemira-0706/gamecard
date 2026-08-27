@@ -1,1214 +1,559 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🎭 RPG世界观 · 沉浸式角色扮演</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-thumb { background: rgba(0,0,0,.15); border-radius: 3px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-
-    .typing-dot { animation: blink 1.4s infinite both; }
-    .typing-dot:nth-child(2){ animation-delay:.2s; }
-    .typing-dot:nth-child(3){ animation-delay:.4s; }
-    @keyframes blink{ 0%,80%,100%{opacity:.2;} 40%{opacity:1;} }
-
-    .chat-bubble { position: relative; max-width: 72%; word-break: break-word; }
-    .chat-bubble.user::after {
-        content:''; position:absolute; right:-6px; top:12px;
-        border:6px solid transparent; border-left-color: #95ec69; border-right:0;
-    }
-    .chat-bubble.other::after {
-        content:''; position:absolute; left:-6px; top:12px;
-        border:6px solid transparent; border-right-color: #fff; border-left:0;
-    }
-    .dark .chat-bubble.other::after { border-right-color: #2b2b2b; }
-
-    .fade-in { animation: fadeIn .25s ease; }
-    @keyframes fadeIn{ from{opacity:0;transform:translateY(6px);} to{opacity:1;transform:translateY(0);} }
-
-    .card-hover { transition: all .2s; }
-    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
-
-    .modal-overlay { background: rgba(0,0,0,.45); backdrop-filter: blur(2px); }
-    textarea { resize: vertical; }
-
-    .theme-sky     { --bg:#eef5ff; --side:#e3efff; --accent:#3b82f6; --accent-soft:#dbeafe; }
-    .theme-green   { --bg:#f0faf0; --side:#e6f5e6; --accent:#22a06b; --accent-soft:#d9f2e4; }
-    .theme-coffee  { --bg:#faf6f0; --side:#f3ebde; --accent:#a06a3b; --accent-soft:#f0e4d3; }
-    .theme-purple  { --bg:#f8f3ff; --side:#efe7fa; --accent:#8b5cf6; --accent-soft:#ede9fe; }
-    .theme-dark    { --bg:#1a1a1a; --side:#222; --accent:#6366f1; --accent-soft:#2d2b55; }
-
-    .bg-app  { background: var(--bg); }
-    .bg-side { background: var(--side); }
-    .text-accent { color: var(--accent); }
-    .bg-accent { background: var(--accent); }
-    .bg-accent-soft { background: var(--accent-soft); }
-    .border-accent { border-color: var(--accent); }
-
-    .chip { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; background:var(--accent-soft); color:var(--accent); }
-
-    /* 流式光标 */
-    .stream-cursor::after { content:'▍'; animation: caret 1s step-end infinite; color: var(--accent); }
-    @keyframes caret { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
-
-    /* Markdown 内容样式 */
-    .md-body p { margin: .35em 0; }
-    .md-body strong { font-weight: 600; }
-    .md-body em { font-style: italic; }
-    .md-body code { background: rgba(0,0,0,.08); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
-    .dark .md-body code { background: rgba(255,255,255,.12); }
-    .md-body pre { background: rgba(0,0,0,.08); padding: 8px; border-radius: 8px; overflow-x: auto; margin: .5em 0; }
-    .md-body blockquote { border-left: 3px solid var(--accent); padding-left: 8px; color: #666; margin: .5em 0; }
-    .dark .md-body blockquote { color: #aaa; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>秘卡RPG - 世界随心而动</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/zustand@4.5.1/dist/index.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            background-color: #f0f2f5;
+        }
+        / Custom Scrollbar /
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 3px;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        / Theme Variables /
+        .theme-sky { --primary: #38bdf8; --primary-dark: #0284c7; --bg: #f0f9ff; }
+        .theme-green { --primary: #34d399; --primary-dark: #059669; --bg: #f0fdf4; }
+        .theme-coffee { --primary: #a78bfa; --primary-dark: #7c3aed; --bg: #faf5ff; } / Using purple for coffee vibe /
+        .theme-purple { --primary: #818cf8; --primary-dark: #6366f1; --bg: #f5f3ff; }
+        .theme-dark {
+            --primary: #60a5fa; --primary-dark: #3b82f6;
+            --bg: #111827; --text: #e5e7eb; --card-bg: #1f2937;
+            --border: #374151; --input-bg: #374151;
+        }
+        .dark-mode .message-bubble { background-color: #374151 !important; color: #e5e7eb !important; }
+        .dark-mode .input-area { background-color: #1f2937 !important; border-top: 1px solid #374151 !important; }
+        .dark-mode input, .dark-mode textarea { background-color: #4b5563 !important; color: #e5e7eb !important; border-color: #6b7280 !important; }
+        
+        .avatar-placeholder {
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; color: white; border-radius: 50%;
+            text-transform: uppercase;
+        }
+    </style>
 </head>
-<body class="bg-app text-gray-800 transition-colors duration-300 h-screen flex">
+<body>
 
-<!-- ========== 左侧边栏 ========== -->
-<aside id="sidebar" class="bg-side border-r border-black/5 flex flex-col h-full w-[300px] shrink-0 transition-colors duration-300">
-    <div class="p-4 border-b border-black/5 shrink-0">
-        <div class="flex items-center gap-2 mb-3">
-            <div class="w-9 h-9 rounded-xl bg-accent flex items-center justify-center text-white text-lg">
-                <i class="fa-solid fa-globe"></i>
-            </div>
-            <div class="flex-1">
-                <h1 class="font-bold text-sm">🎭 RPG世界观</h1>
-                <p class="text-[10px] text-gray-500">沉浸式角色扮演工作台</p>
-            </div>
-        </div>
-        <div class="relative">
-            <input type="text" id="searchInput" placeholder="🔍 搜索对话..." class="w-full pl-9 pr-3 py-2 bg-white/70 dark:bg-white/10 rounded-lg text-sm border border-black/5 focus:outline-none focus:border-accent transition-all">
-            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-        </div>
-    </div>
+<div id="root"></div>
 
-    <div class="flex-1 overflow-y-auto p-3 space-y-2">
-        <p class="text-[11px] text-gray-400 px-1 mb-1">🌍 我的世界</p>
-        <div id="worldList" class="space-y-2"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+const { create } = zustand;
 
-        <button onclick="openWorldModal()" class="w-full p-4 rounded-xl border-2 border-dashed border-gray-300 hover:border-accent text-gray-400 hover:text-accent transition-all text-sm flex flex-col items-center gap-1">
-            <i class="fa-solid fa-plus text-lg"></i>
-            <span>创作新世界 ✨</span>
-        </button>
-    </div>
-
-    <div class="p-3 border-t border-black/5 shrink-0 space-y-1 text-sm">
-        <button onclick="openSettings()" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/60 transition-all">
-            <i class="fa-solid fa-gear text-accent w-5"></i><span>⚙️ 设置</span>
-        </button>
-        <button onclick="exportData()" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/60 transition-all">
-            <i class="fa-solid fa-file-export text-accent w-5"></i><span>📤 导出数据</span>
-        </button>
-        <button onclick="importData()" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/60 transition-all">
-            <i class="fa-solid fa-file-import text-accent w-5"></i><span>📥 导入数据</span>
-        </button>
-    </div>
-</aside>
-
-<!-- ========== 右侧主区 ========== -->
-<main class="flex-1 flex flex-col h-full min-w-0">
-    <header class="h-14 border-b border-black/5 flex items-center px-4 gap-3 shrink-0 bg-white/40 dark:bg-white/5">
-        <div id="chatAvatar" class="w-9 h-9 rounded-full bg-accent-soft flex items-center justify-center text-accent text-lg shrink-0 overflow-hidden">
-            <i class="fa-solid fa-earth-americas"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-            <h2 id="chatTitle" class="font-bold text-sm truncate">选择一个世界开始冒险 🚀</h2>
-            <p id="chatSubtitle" class="text-[11px] text-gray-500 truncate">从左侧选择或创作一个新世界</p>
-        </div>
-        <button onclick="openWorldModal()" class="px-3 py-1.5 rounded-lg bg-accent text-white text-xs hover:opacity-90 transition">
-            <i class="fa-solid fa-pen-to-square mr-1"></i>编辑世界
-        </button>
-        <button onclick="clearChat()" class="px-3 py-1.5 rounded-lg border border-black/10 text-xs hover:bg-white/60 transition">
-            <i class="fa-solid fa-trash-can mr-1"></i>清空
-        </button>
-    </header>
-
-    <div id="chatArea" class="flex-1 overflow-y-auto p-4 space-y-4 bg-app/50" style="background-image: var(--chat-bg); background-size: cover;">
-        <div id="emptyState" class="h-full flex flex-col items-center justify-center text-gray-400 text-center">
-            <i class="fa-solid fa-comments text-5xl mb-3 opacity-30"></i>
-            <p class="text-sm">💬 开始你的第一段对话吧</p>
-            <p class="text-[11px] mt-1">选择模型后，在下方输入框发送消息</p>
-        </div>
-    </div>
-
-    <footer class="border-t border-black/5 p-3 shrink-0 bg-white/40 dark:bg-white/5">
-        <div class="flex items-end gap-2">
-            <button onclick="document.getElementById('imgUpload').click()" class="w-10 h-10 rounded-lg border border-black/10 flex items-center justify-center text-gray-500 hover:text-accent transition shrink-0" title="上传图片">
-                <i class="fa-solid fa-image"></i>
-            </button>
-            <input type="file" id="imgUpload" accept="image/*" class="hidden" onchange="handleImgUpload(event)">
-            <div class="flex-1 relative">
-                <textarea id="msgInput" rows="1" placeholder="输入消息... (Enter 发送 / Shift+Enter 换行)" class="w-full px-3 py-2.5 rounded-lg border border-black/10 focus:outline-none focus:border-accent bg-white/80 dark:bg-white/10 text-sm resize-none max-h-32"></textarea>
-                <span id="imgBadge" class="hidden absolute left-2 bottom-1 text-[10px] chip"><i class="fa-solid fa-paperclip"></i> 图片已附加 <i class="fa-solid fa-xmark cursor-pointer" onclick="clearImg()"></i></span>
-            </div>
-            <select id="modelSelect" class="px-3 py-2.5 rounded-lg border border-black/10 text-xs bg-white/80 dark:bg-white/10 shrink-0 max-w-[130px]"></select>
-            <button onclick="sendMessage()" class="w-10 h-10 rounded-lg bg-accent text-white flex items-center justify-center hover:opacity-90 transition shrink-0" title="发送">
-                <i class="fa-solid fa-paper-plane"></i>
-            </button>
-        </div>
-        <p id="tokenInfo" class="text-[10px] text-gray-400 mt-1 px-1">🔑 Token 消耗: 0 · 消息: 0</p>
-    </footer>
-</main>
-
-<!-- ========== 创建/编辑世界 模态框 ========== -->
-<div id="worldModal" class="fixed inset-0 z-50 hidden modal-overlay flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col">
-        <div class="flex items-center justify-between p-4 border-b border-black/5 shrink-0">
-            <h2 class="font-bold text-lg"><i class="fa-solid fa-wand-magic-sparkles text-accent mr-2"></i><span id="modalTitle">创作新世界</span></h2>
-            <button onclick="closeWorldModal()" class="w-8 h-8 rounded-lg hover:bg-black/5 flex items-center justify-center text-gray-500">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
-
-        <div class="flex gap-1 p-3 border-b border-black/5 overflow-x-auto shrink-0 text-xs">
-            <button class="tab-btn px-3 py-1.5 rounded-lg bg-accent text-white whitespace-nowrap" data-tab="basic">🌍 基础设定</button>
-            <button class="tab-btn px-3 py-1.5 rounded-lg hover:bg-black/5 whitespace-nowrap" data-tab="plane">🔮 位面系统</button>
-            <button class="tab-btn px-3 py-1.5 rounded-lg hover:bg-black/5 whitespace-nowrap" data-tab="story">📖 故事线</button>
-            <button class="tab-btn px-3 py-1.5 rounded-lg hover:bg-black/5 whitespace-nowrap" data-tab="characters">👥 角色卡</button>
-            <button class="tab-btn px-3 py-1.5 rounded-lg hover:bg-black/5 whitespace-nowrap" data-tab="api">🔌 API配置</button>
-            <button class="tab-btn px-3 py-1.5 rounded-lg hover:bg-black/5 whitespace-nowrap" data-tab="visual">🎨 视觉</button>
-        </div>
-
-        <div class="flex-1 overflow-y-auto p-5 space-y-4">
-            <div class="tab-panel" id="tab-basic">
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="text-xs font-medium text-gray-500 block mb-1">🌍 世界名称 *</label>
-                        <input id="w-name" type="text" placeholder="如：ABO世界 / 现代都市" class="w-full px-3 py-2 rounded-lg border border-black/10 text-sm focus:outline-none focus:border-accent">
-                    </div>
-                    <div>
-                        <label class="text-xs font-medium text-gray-500 block mb-1">🏷️ 标签</label>
-                        <input id="w-tags" type="text" placeholder="如：现代,ABO,甜宠" class="w-full px-3 py-2 rounded-lg border border-black/10 text-sm focus:outline-none focus:border-accent">
-                    </div>
-                </div>
-                <div>
-                    <label class="text-xs font-medium text-gray-500 block mb-1">📝 世界观设定 * <span class="text-gray-400">(必写)</span></label>
-                    <textarea id="w-worldview" rows="5" placeholder="详细描述这个世界的背景规则、社会结构、特殊设定等..." class="w-full px-3 py-2 rounded-lg border border-black/10 text-sm focus:outline-none focus:border-accent"></textarea>
-                </div>
-            </div>
-
-            <div class="tab-panel hidden" id="tab-plane">
-                <div class="flex items-center justify-between mb-2">
-                    <label class="text-xs font-medium text-gray-500">🔮 位面系统 <span class="text-gray-400">(可选)</span></label>
-                    <label class="flex items-center gap-1 text-xs"><input type="checkbox" id="plane-enabled" checked class="rounded"> 启用位面系统</label>
-                </div>
-                <textarea id="w-plane" rows="4" placeholder="位面系统描述：如何给宿主下发任务、传达信息、奖惩机制等..." class="w-full px-3 py-2 rounded-lg border border-black/10 text-sm focus:outline-none focus:border-accent"></textarea>
-            </div>
-
-            <div class="tab-panel hidden" id="tab-story">
-                <label class="text-xs font-medium text-gray-500 block mb-1">📖 故事线 * <span class="text-gray-400">(必写)</span></label>
-                <textarea id="w-story" rows="5" placeholder="整个故事的重要走向、关键事件、起承转合..." class="w-full px-3 py-2 rounded-lg border border-black/10 text-sm focus:outline-none focus:border-accent"></textarea>
-            </div>
-
-            <div class="tab-panel hidden" id="tab-characters">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="border border-black/10 rounded-xl p-3 card-hover">
-                        <div class="flex items-center gap-2 mb-2"><span class="text-lg">🧑‍🚀</span><h4 class="font-bold text-sm">宿主/玩家 <span class="text-red-500">*</span></h4></div>
-                        <input id="c-host-name" type="text" placeholder="姓名" class="w-full px-2 py-1.5 mb-2 rounded border border-black/10 text-xs">
-                        <textarea id="c-host-desc" rows="3" placeholder="性格、背景、能力等设定..." class="w-full px-2 py-1.5 rounded border border-black/10 text-xs"></textarea>
-                    </div>
-                    <div class="border border-black/10 rounded-xl p-3 card-hover">
-                        <div class="flex items-center justify-between mb-2">
-                            <div class="flex items-center gap-2"><span class="text-lg">💖</span><h4 class="font-bold text-sm">目标对象</h4></div>
-                            <label class="flex items-center gap-1 text-[10px]"><input type="checkbox" id="c-target-enabled" checked class="rounded"> 启用</label>
-                        </div>
-                        <input id="c-target-name" type="text" placeholder="姓名" class="w-full px-2 py-1.5 mb-2 rounded border border-black/10 text-xs">
-                        <textarea id="c-target-desc" rows="3" placeholder="重要角色设定..." class="w-full px-2 py-1.5 rounded border border-black/10 text-xs"></textarea>
-                    </div>
-                    <div class="border border-black/10 rounded-xl p-3 card-hover">
-                        <div class="flex items-center justify-between mb-2">
-                            <div class="flex items-center gap-2"><span class="text-lg">🎭</span><h4 class="font-bold text-sm">配角</h4></div>
-                            <label class="flex items-center gap-1 text-[10px]"><input type="checkbox" id="c-support-enabled" class="rounded"> 启用</label>
-                        </div>
-                        <textarea id="c-support-desc" rows="3" placeholder="其他重要配角设定（可多个）..." class="w-full px-2 py-1.5 rounded border border-black/10 text-xs"></textarea>
-                    </div>
-                    <div class="border border-black/10 rounded-xl p-3 card-hover">
-                        <div class="flex items-center justify-between mb-2">
-                            <div class="flex items-center gap-2"><span class="text-lg">🤖</span><h4 class="font-bold text-sm">NPC</h4></div>
-                            <label class="flex items-center gap-1 text-[10px]"><input type="checkbox" id="c-npc-enabled" class="rounded"> 启用</label>
-                        </div>
-                        <textarea id="c-npc-desc" rows="3" placeholder="路人、商人、系统NPC等..." class="w-full px-2 py-1.5 rounded border border-black/10 text-xs"></textarea>
-                    </div>
-                </div>
-            </div>
-
-            <div class="tab-panel hidden" id="tab-api">
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="text-xs font-medium text-gray-500 block mb-1">🔌 API 提供商</label>
-                        <select id="api-provider" onchange="updateModels('api-provider','api-model')" class="w-full px-3 py-2 rounded-lg border border-black/10 text-sm focus:outline-none focus:border-accent">
-                            <option value="">— 选择厂商 —</option>
-                            <option value="openai">OpenAI</option>
-                            <option value="azure">Azure OpenAI</option>
-                            <option value="anthropic">Anthropic (Claude)</option>
-                            <option value="google">Google (Gemini)</option>
-                            <option value="deepseek">DeepSeek</option>
-                            <option value="zhipu">智谱AI (GLM)</option>
-                            <option value="qwen">通义千问 (DashScope)</option>
-                            <option value="moonshot">Moonshot (Kimi)</option>
-                            <option value="doubao">豆包 (火山引擎)</option>
-                            <option value="ollama">Ollama (本地)</option>
-                            <option value="custom">自定义兼容API</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="text-xs font-medium text-gray-500 block mb-1">🤖 模型</label>
-                        <select id="api-model" class="w-full px-3 py-2 rounded-lg border border-black/10 text-sm focus:outline-none focus:border-accent"></select>
-                    </div>
-                </div>
-                <div>
-                    <label class="text-xs font-medium text-gray-500 block mb-1">🔑 API Key</label>
-                    <input id="api-key" type="password" placeholder="sk-...（本地Ollama可留空）" class="w-full px-3 py-2 rounded-lg border border-black/10 text-sm focus:outline-none focus:border-accent">
-                    <p class="text-[10px] text-gray-400 mt-1">⚠️ Key 仅保存在本地浏览器，不会上传服务器</p>
-                </div>
-                <div>
-                    <label class="text-xs font-medium text-gray-500 block mb-1">🌐 API Base URL <span class="text-gray-400">(自定义/代理时填写)</span></label>
-                    <input id="api-base" type="text" placeholder="https://api.openai.com/v1" class="w-full px-3 py-2 rounded-lg border border-black/10 text-sm focus:outline-none focus:border-accent">
-                    <p class="text-[10px] text-gray-400 mt-1">💡 若遇 CORS 跨域报错，可填自建中转/代理地址，如 https://your-proxy.workers.dev/v1</p>
-                </div>
-                <div class="flex items-center gap-2">
-                    <input type="checkbox" id="api-stream" checked class="rounded">
-                    <label class="text-xs text-gray-500">🌊 启用流式输出（打字机效果，体验更佳）</label>
-                </div>
-            </div>
-
-            <div class="tab-panel hidden" id="tab-visual">
-                <div class="grid grid-cols-3 gap-4">
-                    <div>
-                        <label class="text-xs font-medium text-gray-500 block mb-1">🧑‍🚀 宿主头像</label>
-                        <div class="flex flex-col items-center gap-2">
-                            <img id="hostAvatarPreview" src="https://api.dicebear.com/7.x/avataaars/svg?seed=host" class="w-20 h-20 rounded-full border-2 border-dashed border-gray-300 object-cover">
-                            <input type="file" id="hostAvatarInput" accept="image/*" class="hidden" onchange="previewAvatar(event,'hostAvatarPreview')">
-                            <button onclick="document.getElementById('hostAvatarInput').click()" class="text-[10px] px-2 py-1 rounded bg-accent-soft text-accent">上传</button>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="text-xs font-medium text-gray-500 block mb-1">💖 对方头像</label>
-                        <div class="flex flex-col items-center gap-2">
-                            <img id="otherAvatarPreview" src="https://api.dicebear.com/7.x/avataaars/svg?seed=other" class="w-20 h-20 rounded-full border-2 border-dashed border-gray-300 object-cover">
-                            <input type="file" id="otherAvatarInput" accept="image/*" class="hidden" onchange="previewAvatar(event,'otherAvatarPreview')">
-                            <button onclick="document.getElementById('otherAvatarInput').click()" class="text-[10px] px-2 py-1 rounded bg-accent-soft text-accent">上传</button>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="text-xs font-medium text-gray-500 block mb-1">🖼️ 聊天背景</label>
-                        <div class="flex flex-col items-center gap-2">
-                            <div id="bgPreview" class="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 bg-gray-100 flex items-center justify-center text-gray-400">
-                                <i class="fa-solid fa-image"></i>
-                            </div>
-                            <input type="file" id="bgInput" accept="image/*" class="hidden" onchange="previewBg(event)">
-                            <button onclick="document.getElementById('bgInput').click()" class="text-[10px] px-2 py-1 rounded bg-accent-soft text-accent">上传</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="flex justify-end gap-2 p-4 border-t border-black/5 shrink-0">
-            <button onclick="closeWorldModal()" class="px-4 py-2 rounded-lg border border-black/10 text-sm hover:bg-black/5">取消</button>
-            <button onclick="saveWorld()" class="px-4 py-2 rounded-lg bg-accent text-white text-sm hover:opacity-90">💾 保存世界</button>
-        </div>
-    </div>
-</div>
-
-<!-- ========== 设置模态框 ========== -->
-<div id="settingsModal" class="fixed inset-0 z-50 hidden modal-overlay flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col">
-        <div class="flex items-center justify-between p-4 border-b border-black/5 shrink-0">
-            <h2 class="font-bold text-lg"><i class="fa-solid fa-gear text-accent mr-2"></i>⚙️ 设置</h2>
-            <button onclick="closeSettings()" class="w-8 h-8 rounded-lg hover:bg-black/5 flex items-center justify-center text-gray-500">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
-        <div class="flex-1 overflow-y-auto p-5 space-y-5">
-            <div>
-                <label class="text-xs font-medium text-gray-500 block mb-2">🎨 主题切换</label>
-                <div class="grid grid-cols-2 gap-2">
-                    <button onclick="setTheme('sky')" class="theme-opt flex items-center gap-2 p-2 rounded-lg border border-black/10 hover:border-accent text-xs" data-theme="sky">
-                        <span class="w-4 h-4 rounded-full" style="background:#3b82f6"></span>恬静天蓝
-                    </button>
-                    <button onclick="setTheme('green')" class="theme-opt flex items-center gap-2 p-2 rounded-lg border border-black/10 hover:border-accent text-xs" data-theme="green">
-                        <span class="w-4 h-4 rounded-full" style="background:#22a06b"></span>清雅淡绿
-                    </button>
-                    <button onclick="setTheme('coffee')" class="theme-opt flex items-center gap-2 p-2 rounded-lg border border-black/10 hover:border-accent text-xs" data-theme="coffee">
-                        <span class="w-4 h-4 rounded-full" style="background:#a06a3b"></span>复古轻咖
-                    </button>
-                    <button onclick="setTheme('purple')" class="theme-opt flex items-center gap-2 p-2 rounded-lg border border-black/10 hover:border-accent text-xs" data-theme="purple">
-                        <span class="w-4 h-4 rounded-full" style="background:#8b5cf6"></span>朝暮浅紫
-                    </button>
-                    <button onclick="setTheme('dark')" class="theme-opt flex items-center gap-2 p-2 rounded-lg border border-black/10 hover:border-accent text-xs col-span-2" data-theme="dark">
-                        <span class="w-4 h-4 rounded-full" style="background:#6366f1"></span>🌙 暗夜幽黑（夜晚护目模式）
-                    </button>
-                </div>
-            </div>
-
-            <div class="border-t border-black/5 pt-4">
-                <label class="text-xs font-medium text-gray-500 block mb-2">🔌 全局默认 API 配置</label>
-                <select id="global-provider" onchange="updateModels('global-provider','global-model')" class="w-full px-3 py-2 rounded-lg border border-black/10 text-sm mb-2">
-                    <option value="">— 选择厂商 —</option>
-                    <option value="openai">OpenAI</option>
-                    <option value="azure">Azure OpenAI</option>
-                    <option value="anthropic">Anthropic</option>
-                    <option value="google">Google</option>
-                    <option value="deepseek">DeepSeek</option>
-                    <option value="zhipu">智谱AI</option>
-                    <option value="qwen">通义千问</option>
-                    <option value="moonshot">Moonshot</option>
-                    <option value="doubao">豆包</option>
-                    <option value="ollama">Ollama</option>
-                    <option value="custom">自定义</option>
-                </select>
-                <select id="global-model" class="w-full px-3 py-2 rounded-lg border border-black/10 text-sm mb-2"></select>
-                <input id="global-key" type="password" placeholder="API Key (全局默认)" class="w-full px-3 py-2 rounded-lg border border-black/10 text-sm mb-2">
-                <input id="global-base" type="text" placeholder="API Base URL (可选代理/中转地址)" class="w-full px-3 py-2 rounded-lg border border-black/10 text-sm mb-2">
-                <button onclick="saveGlobalAPI()" class="w-full py-2 rounded-lg bg-accent text-white text-sm hover:opacity-90">💾 保存全局配置</button>
-            </div>
-
-            <div class="border-t border-black/5 pt-4 space-y-2">
-                <label class="text-xs font-medium text-gray-500 block mb-1">📦 数据管理</label>
-                <div class="flex gap-2">
-                    <button onclick="exportData()" class="flex-1 py-2 rounded-lg border border-black/10 text-sm hover:bg-black/5"><i class="fa-solid fa-download mr-1"></i>导出</button>
-                    <button onclick="importData()" class="flex-1 py-2 rounded-lg border border-black/10 text-sm hover:bg-black/5"><i class="fa-solid fa-upload mr-1"></i>导入</button>
-                    <button onclick="clearAllData()" class="flex-1 py-2 rounded-lg border border-red-200 text-red-500 text-sm hover:bg-red-50"><i class="fa-solid fa-trash mr-1"></i>清空</button>
-                </div>
-                <input type="file" id="importFile" accept=".json" class="hidden" onchange="handleImport(event)">
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Toast -->
-<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] hidden">
-    <div class="px-4 py-2 rounded-lg bg-gray-800 text-white text-sm shadow-lg"></div>
-</div>
-
-<script>
-// ================= 数据模型 =================
-// 支持的厂商 + 默认模型列表。custom/ollama 允许自由输入。
-const MODEL_MAP = {
-    openai:    ['gpt-4o','gpt-4o-mini','gpt-4-turbo','gpt-4.1','gpt-3.5-turbo'],
-    azure:     ['gpt-4o','gpt-4o-mini','gpt-35-turbo'],
-    anthropic: ['claude-3-5-sonnet-20241022','claude-3-5-haiku-20241022','claude-opus-4-20250514','claude-sonnet-4-20250514'],
-    google:    ['gemini-1.5-pro','gemini-1.5-flash','gemini-2.0-flash','gemini-2.5-pro'],
-    deepseek:  ['deepseek-chat','deepseek-coder','deepseek-v3','deepseek-r1'],
-    zhipu:     ['glm-4-plus','glm-4-air','glm-4-flash','glm-4.5'],
-    qwen:      ['qwen-plus','qwen-turbo','qwen-max','qwen2.5-72b-instruct'],
-    moonshot:  ['moonshot-v1-8k','moonshot-v1-32k','moonshot-v1-128k'],
-    doubao:    ['doubao-pro-4k','doubao-lite-4k','doubao-1.5-pro-32k'],
-    ollama:    ['llama3.1','qwen2.5','deepseek-r1','mistral'],
-    custom:    []
-};
-
-// 各厂商默认 Base URL（留空则走前端直连，可能被 CORS 拦截）
-const DEFAULT_BASE = {
-    openai: 'https://api.openai.com/v1',
-    azure: '', // Azure 需用户填写完整部署地址
-    anthropic: 'https://api.anthropic.com/v1',
-    google: 'https://generativelanguage.googleapis.com/v1beta',
-    deepseek: 'https://api.deepseek.com/v1',
-    zhipu: 'https://open.bigmodel.cn/api/paas/v4',
-    qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    moonshot: 'https://api.moonshot.cn/v1',
-    doubao: 'https://ark.cn-beijing.volces.com/api/v3',
-    ollama: 'http://localhost:11434/v1'
-};
-
-const DEFAULT_WORLDS = [
+// --- Mock Data & Initial State ---
+const INITIAL_WORLDS = [
     {
-        id: 'demo-1', name: 'ABO现代都市 🌆', icon: '🌆',
-        tags: ['现代','ABO','甜宠'],
-        worldview: '在一个ABO分化的现代世界中，人类分为Alpha、Beta、Omega三种性别。社会制度已趋近平等，但仍存在隐性的等级观念。信息素是决定吸引力与匹配度的关键。',
-        planeEnabled: true,
-        plane: '位面系统【命运之轮】：每完成一个关键剧情节点，系统会下发新的支线任务。完成可获得"羁绊值"，用于解锁特殊互动。',
-        story: '主角作为一位Omega，在顶级投行工作，意外与一位高冷Alpha顶头上司产生信息素共振。故事围绕职场、家族联姻与自我认同展开。',
-        host: { name: '宿主(我)', desc: 'Omega，投行分析师，外表温润内心坚韧' },
-        targetEnabled: true,
-        target: { name: '陆霆琛', desc: 'Alpha，投行总裁，外冷内热，占有欲强' },
-        supportEnabled: true,
-        support: '林悦 - Beta好友，闺蜜\n赵医生 - 家族御用医生',
-        npcEnabled: true,
-        npc: '同事A、B、C\n咖啡店店员\n管家',
-        api: { provider: 'deepseek', model: 'deepseek-chat', key: '', base: '', stream: true },
-        hostAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=omega',
-        otherAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=alpha',
-        bg: '',
-        chats: []
+        id: '1', name: '穿越ABO世界', tag: '现代,ABO,甜宠', system: '这是一个典型的ABO社会...',
+        characters: { host: { name: '林晚', desc: '穿越者' }, target: { name: '顾衍', desc: 'S级Alpha' } },
+        chats: [
+            { id: 'c1', sender: 'system', content: '欢迎来到这个世界，宿主。', time: '10:00', hidden: false },
+            { id: 'c2', sender: 'host', content: '这里好热...', time: '10:01', hidden: false },
+            { id: 'c3', sender: 'target', content: '做我的Omega吧。', time: '10:02', hidden: false }
+        ]
     },
     {
-        id: 'demo-2', name: '仙侠修真界 ⚔️', icon: '⚔️',
-        tags: ['古风','修真','师徒'],
-        worldview: '天地分人、妖、魔三界。修真者纳灵气于丹田，历经炼气、筑基、金丹、元婴、化神等境界飞升。宗门林立，弱肉强食。',
-        planeEnabled: false,
-        plane: '',
-        story: '废柴少年偶得上古传承，踏上逆天改命的修真之路。在生死历练中，与高冷师尊、妖界公主的情感纠葛逐渐展开。',
-        host: { name: '宿主(我)', desc: '凡人少年，身怀混沌灵根，性格坚韧乐观' },
-        targetEnabled: true,
-        target: { name: '玄清上仙', desc: '师尊，化神期大修，清冷出尘' },
-        supportEnabled: true,
-        support: '师兄 - 内门大师兄\n灵宠 - 火焰狐',
-        npcEnabled: true,
-        npc: '宗门长老、各峰弟子、凡人百姓',
-        api: { provider: 'openai', model: 'gpt-4o-mini', key: '', base: '', stream: true },
-        hostAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=cultivator',
-        otherAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=immortal',
-        bg: '',
+        id: '2', name: '兽人荒原', tag: '奇幻,生存', system: '弱肉强食的世界...',
+        characters: { host: { name: '凯' }, target: { name: '雷霆' } },
+        chats: [{ id: 'c1', sender: 'system', content: '生存挑战开始！', time: '09:00', hidden: false }]
+    },
+    {
+        id: '3', name: '克苏鲁调查员', tag: '恐怖,解谜', system: '不可名状的恐惧...',
+        characters: { host: { name: '调查员' }, target: { name: '深潜者' } },
         chats: []
     }
 ];
 
-let state = {
-    worlds: [],
+// --- Store ---
+const useStore = create((set, get) => ({
+    worlds: JSON.parse(localStorage.getItem('rpg_worlds')) || INITIAL_WORLDS,
     currentWorldId: null,
-    theme: 'sky',
-    globalAPI: { provider: '', model: '', key: '', base: '' },
-    editingId: null
+    apiKey: localStorage.getItem('rpg_api_key') || '',
+    theme: localStorage.getItem('rpg_theme') || 'sky',
+    showSettings: false,
+    showSidebar: true, // For mobile toggle
+    
+    // Actions
+    addWorld: (world) => set((state) => ({ worlds: [...state.worlds, world] })),
+    updateWorld: (id, data) => set((state) => ({
+        worlds: state.worlds.map(w => w.id === id ? { ...w, ...data } : w)
+    })),
+    deleteWorld: (id) => set((state) => ({ worlds: state.worlds.filter(w => w.id !== id) })),
+    setCurrentWorld: (id) => set({ currentWorldId: id }),
+    
+    saveApiKey: (key) => set({ apiKey: key }),
+    setTheme: (theme) => set({ theme }),
+    toggleSettings: () => set((s) => ({ showSettings: !s.showSettings })),
+    toggleSidebar: () => set((s) => ({ showSidebar: !s.showSidebar })),
+    
+    // Chat actions
+    addMessage: (worldId, message) => set((state) => ({
+        worlds: state.worlds.map(w => {
+            if (w.id === worldId) {
+                return { ...w, chats: [...w.chats, message] };
+            }
+            return w;
+        })
+    })),
+    clearChat: (worldId) => set((state) => ({
+        worlds: state.worlds.map(w => w.id === worldId ? { ...w, chats: [] } : w)
+    })),
+}));
+
+// Persist to localStorage
+useStore.subscribe((state) => {
+    localStorage.setItem('rpg_worlds', JSON.stringify(state.worlds));
+    localStorage.setItem('rpg_api_key', state.apiKey);
+    localStorage.setItem('rpg_theme', state.theme);
+});
+
+// --- Components ---
+
+const Sidebar = () => {
+    const { worlds, currentWorldId, setCurrentWorld, deleteWorld, showSidebar, toggleSidebar } = useStore();
+    const [search, setSearch] = useState('');
+    
+    const filtered = worlds.filter(w => w.name.toLowerCase().includes(search.toLowerCase()));
+
+    return (
+        <>
+            {/ Mobile Overlay /}
+            {showSidebar && <div className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden" onClick={toggleSidebar}></div>}
+            
+            <div className={fixed md:relative w-80 h-full bg-white border-r z-40 transform transition-transform duration-300 ease-in-out ${showSidebar ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 flex flex-col}>
+                {/ Header /}
+                <div className="p-4 border-b flex items-center gap-2">
+                    <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-600 font-bold text-xl">R</div>
+                    <h1 className="font-bold text-lg">秘卡RPG <i className="fas fa-heart text-pink-500 animate-pulse"></i><i className="fas fa-heart text-pink-500 animate-pulse delay-75"></i></h1>
+                </div>
+
+                {/ Search & Create /}
+                <div className="p-4 space-y-2">
+                    <input 
+                        type="text" 
+                        placeholder="搜索世界..." 
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button 
+                        onClick={() => document.getElementById('createModal').showModal()}
+                        className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition flex items-center justify-center gap-2 font-medium"
+                    >
+                        <i className="fas fa-plus"></i> 创作新世界 ✨
+                    </button>
+                </div>
+
+                {/ World List /}
+                <div className="flex-1 overflow-y-auto px-2 pb-4">
+                    {filtered.map(world => (
+                        <div key={world.id} className="group mb-1">
+                            <div 
+                                onClick={() => { setCurrentWorld(world.id); toggleSidebar(); }}
+                                className={w-full p-3 rounded-lg flex items-center justify-between cursor-pointer hover:bg-gray-100 transition ${currentWorldId === world.id ? 'bg-indigo-50 border border-indigo-200' : ''}}
+                            >
+                                <div className="flex items-center gap-3 overflow-hidden">
+                                    <div className="w-8 h-8 bg-indigo-200 rounded-full flex items-center justify-center font-bold text-indigo-600 text-sm shrink-0">W</div>
+                                    <div className="truncate">
+                                        <div className="font-semibold text-sm truncate">{world.name}</div>
+                                        <div className="text-xs text-gray-500 truncate">{world.tag}</div>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); deleteWorld(world.id); }}
+                                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition"
+                                >
+                                    <i className="fas fa-times"></i>
+                                </button>
+                            </div>
+                            {/ Mock sub-chats in sidebar - as per image 2 /}
+                            {world.chats.slice(0,2).map(c => (
+                                <div key={c.id} className="ml-10 pl-2 py-1 text-xs text-gray-500 flex items-center gap-1 truncate border-l-2 border-gray-200 ml-4 mb-1">
+                                    <i className="fas fa-comment-dots"></i> {c.content.substring(0,15)}...
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                    {filtered.length === 0 && <div className="text-center text-gray-400 mt-10">未找到世界</div>}
+                </div>
+
+                <div className="p-4 border-t flex justify-around text-gray-500">
+                    <button className="flex flex-col items-center gap-1"><i className="fas fa-layer-group"></i><span className="text-xs">所有卡片</span></button>
+                    <button onClick={() => useStore.getState().toggleSettings()} className="flex flex-col items-center gap-1"><i className="fas fa-cog"></i><span className="text-xs">设置</span></button>
+                </div>
+            </div>
+        </>
+    );
 };
 
-// ================= 持久化 =================
-function saveState() {
-    try { localStorage.setItem('rpg_state', JSON.stringify(state)); } catch(e) {}
-}
-function loadState() {
-    const s = localStorage.getItem('rpg_state');
-    if (s) {
-        try { state = JSON.parse(s); } catch(e){ state.worlds = DEFAULT_WORLDS; }
-    } else {
-        state.worlds = JSON.parse(JSON.stringify(DEFAULT_WORLDS));
-    }
-    if (!state.theme) state.theme = 'sky';
-    if (!state.globalAPI) state.globalAPI = { provider:'', model:'', key:'', base:'' };
-    applyTheme(state.theme);
-    renderWorldList();
-    populateModelSelect();
-}
+const SettingsPanel = () => {
+    const { theme, setTheme, apiKey, saveApiKey, showSettings } = useStore();
+    const themes = [
+        { id: 'sky', name: '恬静天蓝', icon: 'fa-cloud-sun' },
+        { id: 'green', name: '清雅淡绿', icon: 'fa-leaf' },
+        { id: 'coffee', name: '复古轻咖', icon: 'fa-mug-hot' },
+        { id: 'purple', name: '朝暮浅紫', icon: 'fa-star' },
+        { id: 'dark', name: '暗夜幽黑', icon: 'fa-moon' },
+    ];
 
-// ================= 主题 =================
-function applyTheme(theme) {
-    document.documentElement.className = '';
-    document.documentElement.classList.add(`theme-${theme}`);
-    if (theme === 'dark') document.documentElement.classList.add('dark');
-    document.body.className = `bg-app text-gray-800 transition-colors duration-300 h-screen flex ${theme==='dark'?'text-white':''}`;
-    state.theme = theme;
-    document.querySelectorAll('.theme-opt').forEach(b=>{
-        b.classList.toggle('border-accent', b.dataset.theme===theme);
-        b.classList.toggle('ring-2', b.dataset.theme===theme);
+    return (
+        <div className={fixed bottom-0 left-0 right-0 md:w-80 md:right-4 md:left-auto md:top-1/2 md:-translate-y-1/2 bg-white rounded-t-2xl md:rounded-2xl shadow-2xl z-50 transition-all duration-300 ${showSettings ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'}}>
+            <div className="p-4 border-b flex justify-between items-center">
+                <h2 className="font-bold text-lg"><i className="fas fa-cog mr-2"></i>设置面板</h2>
+                <button onClick={() => useStore.getState().toggleSettings()} className="text-gray-400"><i className="fas fa-times"></i></button>
+            </div>
+            <div className="p-4 space-y-4 max-h-96 overflow-y-auto">
+                <div>
+                    <h3 className="font-semibold mb-2">主题切换</h3>
+                    <div className="grid grid-cols-5 gap-2">
+                        {themes.map(t => (
+                            <button 
+                                key={t.id}
+                                onClick={() => setTheme(t.id)}
+                                className={p-2 rounded-lg flex flex-col items-center gap-1 ${theme === t.id ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-gray-100'}}
+                            >
+                                <i className={fas ${t.icon}}></i>
+                                <span className="text-xs">{t.name}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <div>
+                    <h3 className="font-semibold mb-2">API 配置</h3>
+                    <textarea 
+                        value={apiKey}
+                        onChange={(e) => saveApiKey(e.target.value)}
+                        placeholder="请输入您的 API Key..."
+                        rows="3"
+                        className="w-full border rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    ></textarea>
+                    <p className="text-xs text-gray-500 mt-1">支持 OpenAI 及兼容接口
+                </div>
+                <div className="flex gap-2 pt-2">
+                    <button className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50"><i className="fas fa-download mr-1"></i>导入数据</button>
+                    <button className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50"><i className="fas fa-upload mr-1"></i>导出数据</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const CreateWorldModal = () => {
+    const { addWorld } = useStore();
+    const [form, setForm] = useState({
+        name: '', tag: '', system: '', host: '', target: '', story: ''
     });
-}
-function setTheme(t) { applyTheme(t); saveState(); toast('🎨 主题已切换'); }
 
-// ================= 世界列表 =================
-function renderWorldList() {
-    const el = document.getElementById('worldList');
-    el.innerHTML = state.worlds.map(w => `
-        <div onclick="switchWorld('${w.id}')" class="group relative bg-white/70 dark:bg-white/5 rounded-xl p-3 cursor-pointer card-hover border-l-4 ${w.id===state.currentWorldId?'border-accent':'border-transparent'}">
-            <div class="flex items-center gap-2 mb-1">
-                <span class="text-lg">${w.icon || '🌍'}</span>
-                <span class="font-bold text-sm truncate flex-1">${escapeHtml(w.name)}</span>
-                ${w.chats && w.chats.length ? `<span class="text-[10px] bg-accent-soft text-accent px-1.5 py-0.5 rounded-full">${w.chats.length}</span>` : ''}
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if(!form.name || !form.system) return alert('名称和世界观必填');
+        
+        const newWorld = {
+            id: Date.now().toString(),
+            name: form.name,
+            tag: form.tag,
+            system: form.system,
+            characters: { host: { name: form.host, desc: '' }, target: { name: form.target, desc: '' } },
+            chats: [],
+            createdAt: new Date().toLocaleString()
+        };
+        addWorld(newWorld);
+        setForm({ name: '', tag: '', system: '', host: '', target: '', story: '' });
+        document.getElementById('createModal').close();
+    };
+
+    return (
+        <dialog id="createModal" className="backdrop:bg-black/50 rounded-2xl p-0 w-full max-w-2xl border-none outline-none">
+            <div className="bg-white rounded-2xl overflow-hidden">
+                <div className="p-4 border-b flex justify-between items-center bg-gradient-to-r from-indigo-50 to-purple-50">
+                    <h2 className="font-bold text-xl text-indigo-600"><i className="fas fa-wand-magic-sparkles mr-2"></i>创作新世界 ✨</h2>
+                    <button onClick={() => document.getElementById('createModal').close()} className="text-gray-500 text-2xl">&times;</button>
+                </div>
+                
+                <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium mb-1">世界名称 *</label>
+                            <input 
+                                type="text" 
+                                value={form.name}
+                                onChange={(e) => setForm({...form, name: e.target.value})}
+                                placeholder="如：ABO世界 / 现代都市"
+                                className="w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">标签</label>
+                            <input 
+                                type="text" 
+                                value={form.tag}
+                                onChange={(e) => setForm({...form, tag: e.target.value})}
+                                placeholder="如：现代,ABO,甜宠"
+                                className="w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium mb-1">世界观设定 * (必写)</label>
+                        <textarea 
+                            value={form.system}
+                            onChange={(e) => setForm({...form, system: e.target.value})}
+                            placeholder="详细描述这个世界的背景规则、社会结构、特殊设定等..."
+                            rows="4"
+                            className="w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        ></textarea>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium mb-1">主角 (宿主) 名称</label>
+                        <input 
+                            type="text" 
+                            value={form.host}
+                            onChange={(e) => setForm({...form, host: e.target.value})}
+                            placeholder="宿主名称"
+                            className="w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium mb-1">目标对象名称</label>
+                        <input 
+                            type="text" 
+                            value={form.target}
+                            onChange={(e) => setForm({...form, target: e.target.value})}
+                            placeholder="重要角色名称"
+                            className="w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium mb-1">故事线简介</label>
+                        <textarea 
+                            value={form.story}
+                            onChange={(e) => setForm({...form, story: e.target.value})}
+                            placeholder="故事的大致走向..."
+                            rows="2"
+                            className="w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        ></textarea>
+                    </div>
+                    
+                    <div className="flex justify-end gap-3 pt-4 border-t">
+                        <button 
+                            type="button" 
+                            onClick={() => document.getElementById('createModal').close()}
+                            className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                        >取消</button>
+                        <button 
+                            type="submit"
+                            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                        >保存世界</button>
+                    </div>
+                </form>
             </div>
-            <p class="text-[11px] text-gray-500 truncate">${(w.worldview||'').substring(0,30)}...</p>
-            <div class="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 flex flex-col gap-1 transition">
-                <button onclick="event.stopPropagation();editWorld('${w.id}')" class="w-6 h-6 rounded-full bg-white shadow flex items-center justify-center text-xs text-gray-500 hover:text-accent"><i class="fa-solid fa-pen"></i></button>
-                <button onclick="event.stopPropagation();deleteWorld('${w.id}')" class="w-6 h-6 rounded-full bg-white shadow flex items-center justify-center text-xs text-gray-500 hover:text-red-500"><i class="fa-solid fa-trash"></i></button>
-            </div>
-        </div>
-    `).join('');
-}
+        </dialog>
+    );
+};
 
-function switchWorld(id) {
-    state.currentWorldId = id;
-    saveState();
-    renderWorldList();
-    renderChat();
-    populateModelSelect();
-}
+const MessageBubble = ({ msg, isHost }) => {
+    const getInitials = (str) => str ? str.trim().charAt(0) : '?';
+    
+    // Style based on sender
+    let alignClass = 'justify-start';
+    let bubbleClass = 'bg-white border border-gray-200';
+    let textAlign = 'text-left';
+    let avatarBg = 'bg-indigo-500';
 
-// ================= 聊天渲染 =================
-function currentWorld() { return state.worlds.find(w=>w.id===state.currentWorldId); }
-
-function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-function renderChat() {
-    const w = currentWorld();
-    const area = document.getElementById('chatArea');
-    const empty = document.getElementById('emptyState');
-    const titleEl = document.getElementById('chatTitle');
-    const subEl = document.getElementById('chatSubtitle');
-    const avatarEl = document.getElementById('chatAvatar');
-
-    if (!w) {
-        titleEl.textContent = '选择一个世界开始冒险 🚀';
-        subEl.textContent = '从左侧选择或创作一个新世界';
-        avatarEl.innerHTML = '<i class="fa-solid fa-earth-americas"></i>';
-        area.innerHTML = '';
-        area.appendChild(empty);
-        empty.style.display = 'flex';
-        updateTokenInfo();
-        return;
+    if (msg.sender === 'host') {
+        alignClass = 'justify-end';
+        bubbleClass = 'bg-indigo-500 text-white';
+        avatarBg = 'bg-blue-800';
+    } else if (msg.sender === 'target') {
+        alignClass = 'justify-start';
+        bubbleClass = 'bg-gray-100';
+        avatarBg = 'bg-purple-500';
     }
 
-    titleEl.textContent = w.name;
-    subEl.textContent = (w.tags||[]).join(' · ') || '沉浸式角色扮演';
-    avatarEl.innerHTML = `<img src="${w.otherAvatar||''}" class="w-full h-full rounded-full object-cover" onerror="this.outerHTML='<i class=\\"fa-solid fa-user-astronaut\\"></i>'">`;
+    if (msg.hidden) return null; // Hide system private messages
 
-    if (!w.chats || !w.chats.length) {
-        area.innerHTML = '';
-        area.appendChild(empty);
-        empty.style.display = 'flex';
-        updateTokenInfo();
-        return;
+    return (
+        <div className={flex items-end gap-2 my-2 px-2 ${alignClass}}>
+            {msg.sender !== 'host' && (
+                <div className={w-8 h-8 rounded-full flex items-center justify-center text-white text-sm shrink-0 ${avatarBg}}>
+                    {getInitials(msg.senderName || msg.sender)}
+                </div>
+            )}
+            <div className={max-w-[70%] ${textAlign}}>
+                <div className={p-3 rounded-2xl shadow-sm ${bubbleClass}}>
+                    {msg.html ? <div dangerouslySetInnerHTML={{ __html: msg.html }} /> : msg.content}
+                </div>
+                <div className="text-xs text-gray-400 mt-1 px-1">{msg.time}</div>
+            </div>
+            {msg.sender === 'host' && (
+                <div className={w-8 h-8 rounded-full flex items-center justify-center text-white text-sm shrink-0 ${avatarBg}}>
+                    {getInitials(msg.senderName || '我')}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const ChatInterface = () => {
+    const { worlds, currentWorldId, addMessage, clearChat } = useStore();
+    const [input, setInput] = useState('');
+    const chatEndRef = useRef(null);
+    
+    const world = worlds.find(w => w.id === currentWorldId);
+    
+    // Auto scroll
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [world?.chats]);
+
+    const handleSend = () => {
+        if (!input.trim() || !world) return;
+
+        const userMsg = {
+            id: Date.now(),
+            sender: 'host',
+            senderName: world.characters.host.name || '宿主',
+            content: input,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            hidden: false
+        };
+
+        const systemReply = {
+            id: Date.now() + 1,
+            sender: 'system',
+            senderName: '位面系统',
+            content: 收到了关于"${input}"的指令，正在改写现实...,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            hidden: true // System messages only visible to host
+        };
+
+        addMessage(currentWorldId, userMsg);
+        setTimeout(() => addMessage(currentWorldId, systemReply), 500);
+        
+        setInput('');
+    };
+
+    if (!world) {
+        return (
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-gray-50">
+                <i className="fas fa-compass text-6xl mb-4"></i>
+                <h2 className="text-2xl font-bold mb-2">世界随心而动</h2>
+                选择一个已有世界，或点击下方按钮开始你的冒险
+                <button 
+                    onClick={() => document.getElementById('createModal').showModal()}
+                    className="mt-6 px-6 py-3 bg-indigo-600 text-white rounded-full text-lg shadow-lg hover:scale-105 transition-transform"
+                >
+                    创作新世界 ✨
+                </button>
+            </div>
+        );
     }
 
-    area.innerHTML = w.chats.map((m,i)=> renderMessage(m,i)).join('');
-    area.scrollTop = area.scrollHeight;
-    updateTokenInfo();
-}
+    return (
+        <div className="flex flex-col h-full bg-gray-50">
+            {/ Chat Header /}
+            <div className="p-4 border-b bg-white flex items-center gap-3 shadow-sm">
+                <button onClick={() => useStore.setState({ currentWorldId: null })} className="md:hidden text-gray-500">
+                    <i className="fas fa-arrow-left"></i>
+                </button>
+                <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center font-bold text-indigo-600">
+                    {world.name.charAt(0)}
+                </div>
+                <div>
+                    <h2 className="font-bold">{world.name}</h2>
+                    <p className="text-xs text-gray-500 truncate">{world.tag}
+                </div>
+            </div>
 
-function renderMessage(m, idx) {
-    const w = currentWorld();
-    const isUser = m.role === 'user';
-    const avatar = isUser ? (w.hostAvatar||'') : (w.otherAvatar||'');
-    return `
-    <div class="flex items-start gap-2 fade-in ${isUser?'flex-row-reverse':'flex-row'} group" data-idx="${idx}">
-        <div class="w-9 h-9 rounded-full bg-accent-soft flex items-center justify-center text-accent text-sm shrink-0 overflow-hidden">
-            ${avatar ? `<img src="${avatar}" class="w-full h-full object-cover" onerror="this.style.display='none'">` : ''}
-            <i class="fa-solid ${isUser?'fa-user':'fa-user-astronaut'}"></i>
+            {/ Messages Area /}
+            <div className="flex-1 overflow-y-auto p-4 space-y-1 bg-gray-50">
+                {world.chats.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5'%3E%3Cpath d='M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z'/%3E%3C/svg%3E" className="w-16 h-16 mb-4 opacity-50" />
+                        <p className="text-lg">对话即将开始...
+                        <p className="text-sm">向这个世界发送你的第一条消息吧。
+                    </div>
+                ) : (
+                    world.chats.map(msg => <MessageBubble key={msg.id} msg={msg} />)
+                )}
+                <div ref={chatEndRef}></div>
+            </div>
+
+            {/ Input Area /}
+            <div className="p-4 bg-white border-t">
+                <div className="flex gap-2">
+                    <button className="p-3 border rounded-full text-gray-500 hover:bg-gray-50">
+                        <i className="fas fa-paperclip"></i>
+                    </button>
+                    <textarea 
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                        placeholder="请在这里输入文字..."
+                        rows="1"
+                        className="flex-1 border rounded-full p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                    ></textarea>
+                    <button 
+                        onClick={handleSend}
+                        className="p-3 bg-indigo-600 text-white rounded-full w-12 h-12 flex items-center justify-center shadow-lg hover:bg-indigo-700"
+                    >
+                        <i className="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
         </div>
-        <div class="flex flex-col ${isUser?'items-end':'items-start'} max-w-[75%]">
-            <div class="chat-bubble ${isUser?'user bg-[#95ec69] text-gray-900':'other bg-white dark:bg-[#2b2b2b] text-gray-800 dark:text-gray-100'} rounded-2xl px-4 py-2 text-sm shadow-sm">
-                ${m.image ? `<img src="${m.image}" class="max-w-[200px] rounded-lg mb-1"><br>` : ''}
-                <div class="md-body">${m.content ? marked.parseInline(m.content) : ''}</div>
-            </div>
-            <div class="flex items-center gap-2 mt-1 opacity-0 group-hover:opacity-100 transition text-[10px] text-gray-400 px-1">
-                ${m.tokens ? `<span>🪙 ${m.tokens} tok</span>` : ''}
-                <button onclick="deleteMsg(${idx})" class="hover:text-red-500"><i class="fa-solid fa-trash"></i> 删除</button>
-                ${!isUser ? `<button onclick="regenerateMsg(${idx})" class="hover:text-accent"><i class="fa-solid fa-rotate"></i> 重新生成</button>` : ''}
-                <button onclick="editMsg(${idx})" class="hover:text-accent"><i class="fa-solid fa-pen"></i> 修改</button>
-            </div>
-        </div>
-    </div>`;
-}
+    );
+};
 
-function updateTokenInfo() {
-    const w = currentWorld();
-    const info = document.getElementById('tokenInfo');
-    if (!w || !w.chats) { info.textContent = '🔑 Token 消耗: 0 · 消息: 0'; return; }
-    const total = w.chats.reduce((s,m)=>s+(m.tokens||0),0);
-    info.textContent = `🔑 Token 消耗: ${total} · 消息: ${w.chats.length}`;
-}
+const Layout = () => {
+    const { theme } = useStore();
 
-// ================= 系统提示词 =================
-function buildSystemPrompt(w) {
-    let p = `【世界观设定】\n${w.worldview||''}\n\n`;
-    if (w.planeEnabled && w.plane) p += `【位面系统】\n${w.plane}\n\n`;
-    p += `【故事线】\n${w.story||''}\n\n`;
-    p += `【角色设定】\n`;
-    if (w.host) p += `- 宿主/玩家：${w.host.name} — ${w.host.desc}\n`;
-    if (w.targetEnabled && w.target) p += `- 目标对象：${w.target.name} — ${w.target.desc}\n`;
-    if (w.supportEnabled && w.support) p += `- 配角：${w.support}\n`;
-    if (w.npcEnabled && w.npc) p += `- NPC：${w.npc}\n`;
-    p += `\n请严格根据以上设定进行角色扮演。你扮演除宿主之外的所有角色，用生动细腻的中文回复，包含动作、神态、心理和环境描写。注意区分不同角色的语言风格。可使用 **加粗**、*斜体*、> 引用等 Markdown 格式。只输出角色扮演内容，不要跳出角色。`;
-    return p;
-}
-
-// 将聊天记录转为 API 所需的多模态 messages（OpenAI 格式）
-function buildMessages(w, extraUser) {
-    const msgs = [{ role: 'system', content: buildSystemPrompt(w) }];
-    const history = w.chats.slice(-20);
-    history.forEach(m=>{
-        if (!m.content && !m.image) return;
-        if (m.role === 'assistant' || m.role === 'user') {
-            msgs.push({ role: m.role, content: m.content || '' });
-        }
-    });
-    if (extraUser) msgs.push(extraUser);
-    return msgs;
-}
-
-// ================= 发送消息 =================
-async function sendMessage() {
-    const w = currentWorld();
-    if (!w) { toast('⚠️ 请先选择或创建一个世界'); return; }
-
-    const input = document.getElementById('msgInput');
-    const content = input.value.trim();
-    const img = input.dataset.img || '';
-    if (!content && !img) return;
-
-    const api = (w.api && w.api.key) ? w.api : state.globalAPI;
-    if (!api || !api.provider) { toast('🔑 请先在设置或世界卡片中配置 API 厂商'); return; }
-    // ollama 本地可无 key；云端必须有 key
-    if (!api.key && api.provider !== 'ollama') { toast('🔑 请先填写 API Key'); return; }
-
-    const userMsg = { role: 'user', content, image: img, tokens: estimateTokens(content) };
-    if (!w.chats) w.chats = [];
-    w.chats.push(userMsg);
-
-    // 清空输入（先备份图片，regenerate 时需要）
-    input.value = '';
-    delete input.dataset.img;
-    document.getElementById('imgBadge').classList.add('hidden');
-    autoResize(input);
-    renderChat();
-    saveState();
-
-    const area = document.getElementById('chatArea');
-    const typingId = 'typing-' + Date.now();
-    area.insertAdjacentHTML('beforeend', `
-        <div id="${typingId}" class="flex items-start gap-2 fade-in">
-            <div class="w-9 h-9 rounded-full bg-accent-soft flex items-center justify-center text-accent text-sm shrink-0">
-                <i class="fa-solid fa-user-astronaut"></i>
-            </div>
-            <div class="chat-bubble other bg-white dark:bg-[#2b2b2b] rounded-2xl px-4 py-2 shadow-sm">
-                <span class="typing-dot">●</span><span class="typing-dot">●</span><span class="typing-dot">●</span>
-            </div>
-        </div>`);
-    area.scrollTop = area.scrollHeight;
-
-    try {
-        // extraUser 用于 API：若带图则用多模态格式
-        const extraUser = content || img ? { role: 'user', content: img ? [{type:'text',text:content||''},{type:'image_url',image_url:{url:img}}] : content } : null;
-
-        const stream = w.api?.stream !== false && state.globalAPI?.stream !== false;
-        let reply = '';
-        if (stream) {
-            reply = await streamAPI(api, buildMessages(w, extraUser), typingId);
+    // Apply theme class to root
+    useEffect(() => {
+        const root = document.documentElement;
+        root.classList.remove('theme-sky', 'theme-green', 'theme-coffee', 'theme-purple', 'theme-dark');
+        root.classList.add(theme-${theme});
+        if (theme === 'dark') {
+            root.classList.add('dark-mode');
         } else {
-            reply = await callAPI(api, buildMessages(w, extraUser));
+            root.classList.remove('dark-mode');
         }
+    }, [theme]);
 
-        document.getElementById(typingId)?.remove();
-        const aiMsg = { role: 'assistant', content: reply, tokens: estimateTokens(reply) };
-        w.chats.push(aiMsg);
-        renderChat();
-        saveState();
-    } catch(e) {
-        document.getElementById(typingId)?.remove();
-        const errMsg = { role: 'assistant', content: `⚠️ **请求失败**：${escapeHtml(e.message)}\n\n💡 常见排查：\n- CORS 跨域被拦截 → 在 API 配置里填**中转/代理地址**\n- Key 错误或额度不足\n- 模型名称不正确`, tokens: 0 };
-        w.chats.push(errMsg);
-        renderChat();
-        saveState();
-    }
-}
+    return (
+        <div className={h-screen flex flex-col md:flex-row overflow-hidden transition-colors duration-300}>
+            <Sidebar />
+            <ChatInterface />
+            <SettingsPanel />
+            <CreateWorldModal />
+        </div>
+    );
+};
 
-function estimateTokens(s) { return Math.ceil((s||'').length / 4); }
-
-// ================= API 调用（非流式） =================
-async function callAPI(api, messages) {
-    const model = api.model;
-    let baseUrl = api.base || DEFAULT_BASE[api.provider] || 'https://api.openai.com/v1';
-
-    // Anthropic 原生格式
-    if (api.provider === 'anthropic') {
-        const sysMsg = messages.find(m=>m.role==='system');
-        const chatMsgs = messages.filter(m=>m.role!=='system').map(m=>{
-            // 统一多模态：将 OpenAI 的 content 数组转 Claude 的 content 数组
-            if (Array.isArray(m.content)) {
-                return { role: m.role, content: m.content.map(p=>{
-                    if (p.type==='image_url') return { type:'image', source:{ type:'base64', media_type: guessMime(p.image_url.url), data: p.image_url.url.split(',')[1] } };
-                    return { type:'text', text: p.text||'' };
-                }) };
-            }
-            return m;
-        });
-        const resp = await fetch(`${baseUrl}/messages`, {
-            method: 'POST',
-            headers: { 'x-api-key': api.key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-            body: JSON.stringify({ model, system: sysMsg?.content || '', messages: chatMsgs, max_tokens: 2048 })
-        });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.error?.message || 'API Error');
-        return data.content?.map(b=>b.text||'').join('') || '';
-    }
-
-    // Google Gemini 原生格式
-    if (api.provider === 'google') {
-        const sysMsg = messages.find(m=>m.role==='system');
-        const parts = [];
-        if (sysMsg) parts.push({ text: `【系统设定】\n${sysMsg.content}` });
-        messages.filter(m=>m.role!=='system').forEach(m=>{
-            const role = m.role==='assistant' ? 'model' : 'user';
-            parts.push({ role, parts: toGeminiParts(m.content) });
-        });
-        const url = `${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(api.key)}`;
-        const resp = await fetch(url, {
-            method:'POST', headers:{'content-type':'application/json'},
-            body: JSON.stringify({ contents: groupGeminiParts(parts), generationConfig:{ temperature:0.8, maxOutputTokens:2048 } })
-        });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.error?.message || 'API Error');
-        return data.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('') || '';
-    }
-
-    // Azure OpenAI：base 形如 https://xxx.openai.azure.com/openai/deployments/{deploy}
-    if (api.provider === 'azure') {
-        const resp = await fetch(`${baseUrl}/chat/completions?api-version=2024-08-01-preview`, {
-            method:'POST', headers:{ 'api-key': api.key, 'Content-Type':'application/json' },
-            body: JSON.stringify({ messages, temperature:0.8, max_tokens:2048 })
-        });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.error?.message || 'API Error');
-        return data.choices?.[0]?.message?.content || '';
-    }
-
-    // OpenAI 兼容格式（DeepSeek / GLM / Qwen / Moonshot / 自定义 / Ollama / 中转）
-    const resp = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${api.key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, messages, temperature: 0.8, max_tokens: 2048 })
-    });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error?.message || JSON.stringify(data.error) || 'API Error');
-    return data.choices?.[0]?.message?.content || '';
-}
-
-// ================= 流式输出（SSE） =================
-async function streamAPI(api, messages, typingId) {
-    const model = api.model;
-    let baseUrl = api.base || DEFAULT_BASE[api.provider] || 'https://api.openai.com/v1';
-    const typingEl = document.getElementById(typingId);
-    const bubble = typingEl?.querySelector('.chat-bubble');
-    let acc = '';
-
-    const finish = ()=>{
-        if (typingEl && bubble) {
-            bubble.classList.remove('stream-cursor');
-            bubble.innerHTML = `<div class="md-body">${marked.parseInline(acc)}</div>`;
-        }
-        return acc;
-    };
-
-    // Anthropic 流式
-    if (api.provider === 'anthropic') {
-        const sysMsg = messages.find(m=>m.role==='system');
-        const chatMsgs = messages.filter(m=>m.role!=='system');
-        const resp = await fetch(`${baseUrl}/messages`, {
-            method:'POST',
-            headers:{ 'x-api-key':api.key, 'anthropic-version':'2023-06-01', 'content-type':'application/json', 'anthropic-dangerous-direct-browser-access':'true' },
-            body: JSON.stringify({ model, system:sysMsg?.content||'', messages:chatMsgs, max_tokens:2048, stream:true })
-        });
-        if (!resp.ok) { const d=await resp.json(); throw new Error(d.error?.message||'stream error'); }
-        await forEachSSE(resp, line=>{
-            if (line.event==='content_block_delta' && line.data?.delta?.text) { acc += line.data.delta.text; renderStream(bubble, acc); }
-        });
-        return finish();
-    }
-
-    // Google Gemini 流式
-    if (api.provider === 'google') {
-        const sysMsg = messages.find(m=>m.role==='system');
-        const parts = [];
-        if (sysMsg) parts.push({ text: `【系统设定】\n${sysMsg.content}` });
-        messages.filter(m=>m.role!=='system').forEach(m=>{ parts.push({ role: m.role==='assistant'?'model':'user', parts: toGeminiParts(m.content) }); });
-        const url = `${baseUrl}/models/${model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(api.key)}`;
-        const resp = await fetch(url, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ contents: groupGeminiParts(parts), generationConfig:{ temperature:0.8 } }) });
-        if (!resp.ok) { const d=await resp.json(); throw new Error(d.error?.message||'stream error'); }
-        await forEachSSE(resp, line=>{ const txt = line.data?.candidates?.[0]?.content?.parts?.[0]?.text; if (txt) { acc += txt; renderStream(bubble, acc); } });
-        return finish();
-    }
-
-    // OpenAI 兼容流式（含 Azure / Ollama / 中转）
-    const url = api.provider==='azure'
-        ? `${baseUrl}/chat/completions?api-version=2024-08-01-preview&api-key=${encodeURIComponent(api.key)}`
-        : `${baseUrl}/chat/completions`;
-    const headers = api.provider==='azure'
-        ? { 'Content-Type':'application/json', 'api-key':api.key }
-        : { 'Authorization': `Bearer ${api.key}`, 'Content-Type':'application/json' };
-    const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify({ model, messages, temperature:0.8, max_tokens:2048, stream:true }) });
-    if (!resp.ok) { const d=await resp.json().catch(()=>({})); throw new Error(d.error?.message||`HTTP ${resp.status}`); }
-
-    await forEachSSE(resp, line=>{
-        const choice = line.data?.choices?.[0];
-        if (choice?.delta?.content) { acc += choice.delta.content; renderStream(bubble, acc); }
-    });
-    return finish();
-}
-
-// 把累积文本渲染到 bubble（流式光标）
-function renderStream(bubble, text) {
-    if (!bubble) return;
-    bubble.classList.add('stream-cursor');
-    bubble.innerHTML = `<div class="md-body">${marked.parseInline(text)}</div>`;
-    const area = document.getElementById('chatArea');
-    area.scrollTop = area.scrollHeight;
-}
-
-// 通用 SSE 解析器：遍历每个 event
-async function forEachSSE(resp, onLine) {
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const chunks = buf.split('\n\n');
-        buf = chunks.pop() || '';
-        for (const chunk of chunks) {
-            const lines = chunk.split('\n');
-            let event = 'message', dataStr = '';
-            for (const ln of lines) {
-                if (ln.startsWith('event:')) event = ln.slice(6).trim();
-                else if (ln.startsWith('data:')) dataStr += ln.slice(5).trim();
-            }
-            if (dataStr === '[DONE]') return;
-            if (!dataStr) continue;
-            try { onLine({ event, data: JSON.parse(dataStr) }); } catch(e) {}
-        }
-    }
-}
-
-// ================= 多模态辅助 =================
-function guessMime(dataUrl){ const m = (dataUrl||'').match(/^data:(image\/[^;]+);/); return m ? m[1] : 'image/png'; }
-function toGeminiParts(content){
-    if (Array.isArray(content)) {
-        return content.map(p=>{
-            if (p.type==='image_url') { const [meta, b64] = (p.image_url.url||'').split(','); const mime = guessMime(p.image_url.url); return { inline_data:{ mime_type: mime, data: b64 } }; }
-            return { text: p.text||'' };
-        });
-    }
-    return [{ text: content || '' }];
-}
-function groupGeminiParts(parts){
-    // Gemini 要求 contents 是 [{role, parts}]，user/model 交替
-    const out = []; let cur = null;
-    for (const p of parts) {
-        if (!cur || cur.role !== p.role) { cur = { role: p.role, parts: [] }; out.push(cur); }
-        cur.parts.push(...p.parts);
-    }
-    return out;
-}
-
-// ================= 消息操作 =================
-function deleteMsg(idx) {
-    const w = currentWorld();
-    w.chats.splice(idx, 1);
-    saveState();
-    renderChat();
-}
-function regenerateMsg(idx) {
-    const w = currentWorld();
-    if (idx !== undefined) w.chats.splice(idx); // 删除该条及之后
-    saveState();
-    sendMessage();
-}
-function editMsg(idx) {
-    const w = currentWorld();
-    const m = w.chats[idx];
-    const newContent = prompt('修改消息内容：', m.content);
-    if (newContent !== null && newContent.trim()) {
-        m.content = newContent.trim();
-        saveState();
-        renderChat();
-    }
-}
-function clearChat() {
-    const w = currentWorld();
-    if (!w) return;
-    if (!confirm('确定清空当前世界的所有对话？')) return;
-    w.chats = [];
-    saveState();
-    renderChat();
-}
-
-// ================= 世界模态框 =================
-function openWorldModal(id) {
-    document.getElementById('worldModal').classList.remove('hidden');
-    if (id) {
-        const w = state.worlds.find(x=>x.id===id);
-        state.editingId = id;
-        document.getElementById('modalTitle').textContent = '编辑世界';
-        fillWorldForm(w);
-    } else {
-        state.editingId = null;
-        document.getElementById('modalTitle').textContent = '创作新世界 ✨';
-        resetWorldForm();
-    }
-    switchTab('basic');
-}
-function closeWorldModal() { document.getElementById('worldModal').classList.add('hidden'); }
-
-function fillWorldForm(w) {
-    document.getElementById('w-name').value = w.name||'';
-    document.getElementById('w-tags').value = (w.tags||'').join(',');
-    document.getElementById('w-worldview').value = w.worldview||'';
-    document.getElementById('plane-enabled').checked = w.planeEnabled!==false;
-    document.getElementById('w-plane').value = w.plane||'';
-    document.getElementById('w-story').value = w.story||'';
-    document.getElementById('c-host-name').value = w.host?.name||'';
-    document.getElementById('c-host-desc').value = w.host?.desc||'';
-    document.getElementById('c-target-enabled').checked = w.targetEnabled!==false;
-    document.getElementById('c-target-name').value = w.target?.name||'';
-    document.getElementById('c-target-desc').value = w.target?.desc||'';
-    document.getElementById('c-support-enabled').checked = !!w.supportEnabled;
-    document.getElementById('c-support-desc').value = w.support||'';
-    document.getElementById('c-npc-enabled').checked = !!w.npcEnabled;
-    document.getElementById('c-npc-desc').value = w.npc||'';
-    document.getElementById('api-provider').value = w.api?.provider||'';
-    document.getElementById('api-key').value = w.api?.key||'';
-    document.getElementById('api-base').value = w.api?.base||'';
-    document.getElementById('api-stream').checked = w.api?.stream !== false;
-    updateModels('api-provider','api-model');
-    document.getElementById('api-model').value = w.api?.model||'';
-    document.getElementById('hostAvatarPreview').src = w.hostAvatar||'https://api.dicebear.com/7.x/avataaars/svg?seed=host';
-    document.getElementById('otherAvatarPreview').src = w.otherAvatar||'https://api.dicebear.com/7.x/avataaars/svg?seed=other';
-    if (w.bg) { document.getElementById('bgPreview').style.backgroundImage = `url(${w.bg})`; document.getElementById('bgPreview').style.backgroundSize='cover'; }
-}
-function resetWorldForm() {
-    ['w-name','w-tags','w-worldview','w-plane','w-story','c-host-name','c-host-desc','c-target-name','c-target-desc','c-support-desc','c-npc-desc','api-key','api-base'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('plane-enabled').checked = true;
-    document.getElementById('c-target-enabled').checked = true;
-    document.getElementById('c-support-enabled').checked = false;
-    document.getElementById('c-npc-enabled').checked = false;
-    document.getElementById('api-stream').checked = true;
-    document.getElementById('api-provider').value='';
-    document.getElementById('hostAvatarPreview').src='https://api.dicebear.com/7.x/avataaars/svg?seed=host';
-    document.getElementById('otherAvatarPreview').src='https://api.dicebear.com/7.x/avataaars/svg?seed=other';
-    document.getElementById('bgPreview').style.backgroundImage='';
-    updateModels('api-provider','api-model');
-}
-
-function saveWorld() {
-    const name = document.getElementById('w-name').value.trim();
-    const worldview = document.getElementById('w-worldview').value.trim();
-    if (!name) { toast('⚠️ 请填写世界名称'); return; }
-    if (!worldview) { toast('⚠️ 世界观设定为必填项'); return; }
-
-    const data = {
-        name, icon: autoIcon(name),
-        tags: document.getElementById('w-tags').value.split(/[,，]/).map(s=>s.trim()).filter(Boolean),
-        worldview,
-        planeEnabled: document.getElementById('plane-enabled').checked,
-        plane: document.getElementById('w-plane').value.trim(),
-        story: document.getElementById('w-story').value.trim(),
-        host: { name: document.getElementById('c-host-name').value.trim() || '宿主', desc: document.getElementById('c-host-desc').value.trim() },
-        targetEnabled: document.getElementById('c-target-enabled').checked,
-        target: { name: document.getElementById('c-target-name').value.trim(), desc: document.getElementById('c-target-desc').value.trim() },
-        supportEnabled: document.getElementById('c-support-enabled').checked,
-        support: document.getElementById('c-support-desc').value.trim(),
-        npcEnabled: document.getElementById('c-npc-enabled').checked,
-        npc: document.getElementById('c-npc-desc').value.trim(),
-        api: {
-            provider: document.getElementById('api-provider').value,
-            model: document.getElementById('api-model').value,
-            key: document.getElementById('api-key').value,
-            base: document.getElementById('api-base').value,
-            stream: document.getElementById('api-stream').checked
-        },
-        hostAvatar: document.getElementById('hostAvatarPreview').src,
-        otherAvatar: document.getElementById('otherAvatarPreview').src,
-        bg: document.getElementById('bgPreview').style.backgroundImage.replace(/url\("?(.+?)"?\)/, '$1') || ''
-    };
-
-    if (state.editingId) {
-        const w = state.worlds.find(x=>x.id===state.editingId);
-        Object.assign(w, data);
-        toast('✅ 世界已更新');
-    } else {
-        const newWorld = { id: 'w-' + Date.now(), chats: [], ...data };
-        state.worlds.unshift(newWorld);
-        state.currentWorldId = newWorld.id;
-        toast('🎉 新世界已创建');
-    }
-    saveState();
-    renderWorldList();
-    renderChat();
-    closeWorldModal();
-}
-
-function autoIcon(name){
-    if (/修|仙|剑|古风|江湖/.test(name)) return '⚔️';
-    if (/都市|现代|校园|职场|abo/i.test(name)) return '🌆';
-    if (/西幻|魔幻|龙|骑士|中世纪/.test(name)) return '🐉';
-    if (/星|太空|赛博|未来|科幻/.test(name)) return '🚀';
-    return '🌍';
-}
-
-function editWorld(id) { openWorldModal(id); }
-function deleteWorld(id) {
-    if (!confirm('确定删除这个世界？此操作不可撤销。')) return;
-    state.worlds = state.worlds.filter(w=>w.id!==id);
-    if (state.currentWorldId === id) state.currentWorldId = state.worlds[0]?.id || null;
-    saveState();
-    renderWorldList();
-    renderChat();
-}
-
-// ================= Tab 切换 =================
-function switchTab(tab) {
-    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.add('hidden'));
-    document.getElementById('tab-'+tab).classList.remove('hidden');
-    document.querySelectorAll('.tab-btn').forEach(b=>{
-        b.classList.toggle('bg-accent', b.dataset.tab===tab);
-        b.classList.toggle('text-white', b.dataset.tab===tab);
-    });
-}
-document.querySelectorAll('.tab-btn').forEach(b=>{
-    b.addEventListener('click', ()=>switchTab(b.dataset.tab));
-});
-
-// ================= 模型下拉 =================
-function updateModels(providerId, modelId) {
-    const prov = document.getElementById(providerId).value;
-    const sel = document.getElementById(modelId);
-    const cur = sel.value;
-    sel.innerHTML = '<option value="">— 选择/输入模型 —</option>';
-    (MODEL_MAP[prov]||[]).forEach(m=>{
-        const o = document.createElement('option'); o.value=m; o.textContent=m; sel.appendChild(o);
-    });
-    // 自定义/Ollama 允许自由输入
-    if (prov==='custom' || prov==='ollama' || prov==='azure') {
-        sel.innerHTML += '<option value="__custom">✍️ 手动输入...</option>';
-        sel.addEventListener('change', function once(){ if(this.value==='__custom'){ const v=prompt('请输入自定义模型名：'); if(v) this.value=v; } this.removeEventListener('change',once); });
-    }
-    if (cur && (MODEL_MAP[prov]||[]).includes(cur)) sel.value = cur;
-}
-function updateGlobalModels() { updateModels('global-provider','global-model'); }
-function populateModelSelect() {
-    const w = currentWorld();
-    const sel = document.getElementById('modelSelect');
-    sel.innerHTML = '<option value="">选择模型</option>';
-    const api = (w && w.api?.provider) ? w.api : state.globalAPI;
-    if (api?.provider) {
-        (MODEL_MAP[api.provider]||[]).forEach(m=>{
-            const o = document.createElement('option'); o.value=m; o.textContent=m; sel.appendChild(o);
-        });
-    }
-}
-function saveGlobalAPI() {
-    state.globalAPI = {
-        provider: document.getElementById('global-provider').value,
-        model: document.getElementById('global-model').value,
-        key: document.getElementById('global-key').value,
-        base: document.getElementById('global-base').value
-    };
-    saveState();
-    populateModelSelect();
-    closeSettings();
-    toast('✅ 全局 API 已保存');
-}
-
-// ================= 设置 =================
-function openSettings() { document.getElementById('settingsModal').classList.remove('hidden'); }
-function closeSettings() { document.getElementById('settingsModal').classList.add('hidden'); }
-
-// ================= 数据导入导出 =================
-function exportData() {
-    const data = JSON.stringify(state, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `rpg-worlds-${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast('📤 数据已导出');
-}
-function importData() { document.getElementById('importFile').click(); }
-function handleImport(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ()=>{
-        try {
-            const data = JSON.parse(reader.result);
-            if (data.worlds) {
-                state = { ...state, ...data, globalAPI: data.globalAPI || state.globalAPI };
-                applyTheme(state.theme || 'sky');
-                saveState();
-                renderWorldList();
-                renderChat();
-                toast('📥 数据已导入');
-            }
-        } catch(err) { toast('❌ 文件格式错误'); }
-    };
-    reader.readAsText(file);
-}
-function clearAllData() {
-    if (!confirm('确定清空所有数据？此操作不可撤销！')) return;
-    localStorage.removeItem('rpg_state');
-    location.reload();
-}
-
-// ================= 图片上传 =================
-function handleImgUpload(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 5*1024*1024) { toast('⚠️ 图片建议小于 5MB'); return; }
-    const reader = new FileReader();
-    reader.onload = ()=>{
-        const input = document.getElementById('msgInput');
-        input.dataset.img = reader.result;
-        document.getElementById('imgBadge').classList.remove('hidden');
-        toast('🖼️ 图片已附加，发送即可');
-    };
-    reader.readAsDataURL(file);
-}
-function clearImg(){ delete document.getElementById('msgInput').dataset.img; document.getElementById('imgBadge').classList.add('hidden'); }
-function previewAvatar(e, id) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ()=>{ document.getElementById(id).src = reader.result; };
-    reader.readAsDataURL(file);
-}
-function previewBg(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ()=>{
-        const el = document.getElementById('bgPreview');
-        el.style.backgroundImage = `url(${reader.result})`;
-        el.style.backgroundSize = 'cover';
-        document.documentElement.style.setProperty('--chat-bg', `url(${reader.result})`);
-    };
-    reader.readAsDataURL(file);
-}
-
-// ================= 工具函数 =================
-let toastTimer;
-function toast(msg) {
-    const t = document.getElementById('toast');
-    t.querySelector('div').textContent = msg;
-    t.classList.remove('hidden');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(()=>t.classList.add('hidden'), 2500);
-}
-function autoResize(el) {
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 128) + 'px';
-}
-
-// ================= 事件绑定 =================
-document.getElementById('msgInput').addEventListener('input', function(){ autoResize(this); });
-document.getElementById('msgInput').addEventListener('keydown', function(e){
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-});
-document.getElementById('searchInput').addEventListener('input', function(){
-    const q = this.value.trim().toLowerCase();
-    document.querySelectorAll('#worldList > div').forEach(el=>{
-        el.style.display = !q || el.textContent.toLowerCase().includes(q) ? '' : 'none';
-    });
-});
-
-// marked 安全配置：允许 GitHub 风格
-if (window.marked) { marked.setOptions({ breaks:true, gfm:true }); }
-
-// ================= 初始化 =================
-loadState();
-if (state.worlds.length && !state.currentWorldId) {
-    state.currentWorldId = state.worlds[0].id;
-    saveState();
-}
-renderChat();
-updateModels('api-provider','api-model');
-updateModels('global-provider','global-model');
+ReactDOM.createRoot(document.getElementById('root')).render(<Layout />);
 </script>
+
 </body>
 </html>
