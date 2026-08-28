@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>秘卡RPG · 世界随心而动</title>
 <style id="theme-style">
   /* ===== 主题变量（默认：清雅淡绿）===== */
@@ -251,7 +251,7 @@
   .typing{opacity:.6; font-style:italic;}
 
   /* 输入区 */
-  .input-bar{border-top:1px solid var(--line); background:var(--panel); padding:10px 12px; flex-shrink:0;}
+  .input-bar{border-top:1px solid var(--line); background:var(--panel); .input-bar{border-top:1px solid var(--line); background:var(--panel); padding:10px 12px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); flex-shrink:0;}; flex-shrink:0;}
   .input-tools{display:flex; gap:6px; margin-bottom:8px; align-items:center;}
   .tool-btn{padding:6px 10px; border-radius:10px; font-size:12px; color:var(--text-soft); display:flex; align-items:center; gap:4px;}
   .tool-btn:hover{background:var(--panel2);}
@@ -645,9 +645,9 @@ const UI = {
       else if(act==='delchat'){ if(confirm('删除这条对话？')) Store.deleteChat(wid,cid); }
     });
     
-    $('#btnCreateWorld').onclick=()=>Modals.openCreateWorld();
-    $('#btnSettings').onclick=()=>Modals.openSettings();
-    $('#btnAllCards').onclick=()=>Modals.openAllCards();
+    $('#btnCreateWorld').onclick=()=>{ this.closeMobile(); Modals.openCreateWorld(); };
+   $('#btnSettings').onclick=()=>{ this.closeMobile(); Modals.openSettings(); };
+$('#btnAllCards').onclick=()=>{ this.closeMobile(); Modals.openAllCards(); };
   },
   _filterWorlds(q){
     q=(q||'').trim().toLowerCase();
@@ -781,7 +781,7 @@ const UI = {
         </div>`;
     });
     area.innerHTML=html;
-    area.scrollTop=area.scrollHeight;
+    setTimeout(()=>{ area.scrollTop = area.scrollHeight; }, 50);
 
     $$('[data-act]',area).forEach(b=>b.onclick=e=>{
       const act=b.dataset.act, mid=b.dataset.mid;
@@ -1351,12 +1351,12 @@ const Modals = {
       modal.querySelector(`.tab-panel[data-panel="${t.dataset.tab}"]`).classList.add('active');
     });
     $$('[data-theme]',modal).forEach(c=>c.onclick=()=>{
-      $$('[data-theme]',modal).forEach(x=>x.classList.remove('active'));
-      c.classList.add('active');
-      Store.state.theme=c.dataset.theme;
-      document.body.setAttribute('data-theme',c.dataset.theme);
-      Store.save();
-    });
+  $$('[data-theme]',modal).forEach(x=>x.classList.remove('active'));
+  c.classList.add('active');
+  Store.state.theme=c.dataset.theme;
+  document.body.setAttribute('data-theme',c.dataset.theme);
+  Store.save();
+});
     $('#exportData',modal).onclick=()=>{
       const blob=new Blob([JSON.stringify(Store.state,null,2)],{type:'application/json'});
       const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
@@ -1372,8 +1372,12 @@ const Modals = {
       }; r.readAsText(f);
     };
     $('#resetData',modal).onclick=()=>{
-      if(confirm('确定清空所有数据？此操作不可撤销。')){ localStorage.removeItem('mika_rpg_v1'); location.reload(); }
-    };
+  const finalCheck = prompt('确定清空所有数据？此操作不可撤销。\n请输入"清空"两个字确认：');
+  if(finalCheck === '清空'){
+    localStorage.removeItem('mika_rpg_v1'); 
+    location.reload();
+  }
+};
     $('#saveSettings',modal).onclick=()=>{
       const nga={};
       $$('[data-api-prov]',modal).forEach(inp=>{
@@ -1433,7 +1437,11 @@ const API = {
     part.forEach(p=>{
       if(p.isHost) lines.push(`【宿主/玩家：${p.name}】${p.desc||''}`);
       else if(p.isSystem) lines.push(`【位面系统】${p.desc||''}`);
-      else lines.push(`【角色 ${p.name}（${p.role||''}）】${p.desc||''}`);
+      else if (p.pid === 'target' || p.pid === 'sidekick' || p.pid === 'npc') {
+    // 针对群像角色，明确提示 AI 这是一组角色
+    lines.push(`【${p.name}（${p.role || '群像'}）】\n${p.desc || '未提供详细设定'}\n请注意：这里描述的是多个角色，你在回复时应根据上下文选择其中一个角色进行扮演，避免混淆。`);
+}
+else lines.push(`【角色 ${p.name}（${p.role||''}）】${p.desc||''}`);
     });
     const resp=part.find(p=>p.pid===responderPid);
     lines.push(`\n当前你要扮演的角色是：${resp?.name}（${resp?.role||''}）。请完全代入该角色，用符合其性格、身份、说话风格的第一人称回复。不要跳出角色，不要以系统或旁白口吻。回复简洁（1-4 句），可含动作描写。如果收到"重新生成"指令则重新组织语言。`);
