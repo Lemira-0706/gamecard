@@ -362,6 +362,28 @@
   .module-card.disabled .mc-toggle{display:none;}
   .ov-hint{font-size:12px;color:var(--text-soft);line-height:1.7;background:var(--panel2);border-radius:12px;padding:12px;margin-bottom:16px;}
   .ov-hint b{color:var(--primary-dark);}
+
+  /* ===== 增量优化（无障碍 / 交互增强） ===== */
+  .sidebar{ z-index:40; }               /* 侧栏需高于遮罩以正常接收点击 */
+  .scrim{ z-index:35; }                /* 遮罩位于侧栏与内容之间 */
+  .msg-bubble-selectable{ -webkit-user-select:text; user-select:text; }
+  .stop-btn{background:var(--danger); color:#fff; width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0; box-shadow:var(--shadow); font-size:18px;}
+  .stop-btn:active{transform:scale(.92);}
+  .msg-row.me .msg-body{ align-items:flex-end; }
+  /* 发送中时气泡的闪烁光标 */
+  .bubble.typing::after{ content:'▍'; animation:blink 1s steps(2) infinite; margin-left:2px; }
+  @keyframes blink{ 0%{opacity:1;} 50%{opacity:0;} 100%{opacity:1;} }
+  /* 聊天区平滑滚到底 */
+  .chat-area{ scroll-behavior:smooth; }
+  /* 移动端：选中世界后自动收起侧栏已由 JS 处理；这里保证气泡不越界 */
+  @media (max-width:600px){
+    .sidebar{ width:82%; max-width:320px; }
+    .field input,.field textarea,.field select{ font-size:16px; }  /* 防 iOS 自动缩放 */
+  }
+  /* 可访问性：focus 可见 */
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible{
+    outline:2px solid var(--primary); outline-offset:2px;
+  }
 </style>
 </head>
 <body data-theme="qinglu">
@@ -419,7 +441,8 @@ function emptyWorld(){
     api:{provider:'openai', baseUrl:'', apiKey:'', model:'gpt-4o-mini'},
     visual:{bgType:'color', bgValue:'', bgBlur:0},
     characters:{ host:null, target:null, sidekick:null, npc:null },
-    chats:[]
+    chats:[],
+    characters:{ host:{name:'宿主(我)', role:'玩家', desc:'', color:'#4caf7d', img:''}, target:null, sidekick:null, npc:null },
   };
 }
 
@@ -482,6 +505,52 @@ const Store = {
     if(c.npc)list.push({...c.npc, pid:'npc'});
     return list;
   },
+  /* ===== ① 群像角色：把一个 desc 文本解析为多个具名成员 =====
+     约定：每行 "姓名：描述" 或 "姓名: 描述" 视为一个独立角色；
+     未含冒号的单行描述则视为该角色整体（单角色兜底）。 */
+  parseRoleMembers(charDef){
+    if(!charDef) return [];
+    const name=charDef.name||'';
+    const desc=(charDef.desc||'').trim();
+    if(!desc) return [{name, desc:'', key:name}];
+    const lines=desc.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+    const members=[];
+    for(const line of lines){
+      const m=line.match(/^([^：:]+)[：:]\s*(.*)$/);
+      if(m) members.push({name:m[1].trim(), desc:(m[2]||'').trim(), key:m[1].trim()});
+      else { members.push({name, desc:line, key:name}); break; }
+    }
+    if(!members.length) members.push({name, desc, key:name});
+    return members;
+  },
+  /* 收集世界中所有可被 @ 提及的成员（宿主 + target/side/npc 群成员） */
+  getAllMentionable(world){
+    const out=[]; const seen=new Set();
+    const c=world.characters;
+    const walk=(pid,def)=>{
+      if(!def) return;
+      this.parseRoleMembers(def).forEach((m,i)=>{
+        const key=(this.parseRoleMembers(def).length>1)?(`${def.name}::${m.name}`):m.name;
+        if(seen.has(key)) return; seen.add(key);
+        out.push({pid, name:m.name, desc:m.desc, memberKey:key, group:def.name, index:i});
+      });
+    };
+    walk('host',c.host); walk('target',c.target); walk('sidekick',c.sidekick); walk('npc',c.npc);
+    return out;
+  },
+  /* 解析文本中的 @提及；返回 { mentioned:[{pid,memberKey,name}], body } */
+  parseMentions(text, world){
+    const list=this.getAllMentionable(world);
+    const matches=[...text.matchAll(/@([^\s@：:,，。.!?！?]+)/g)];
+    const mentioned=[]; const seen=new Set();
+    for(const mm of matches){
+      const tok=mm[1];
+      const part=list.find(p=>p.name===tok || p.group===tok || p.memberKey===tok || p.key===tok);
+      if(part && !seen.has(part.memberKey)){ seen.add(part.memberKey); mentioned.push(part); }
+    }
+    const body=text.replace(/@\S+\s*/g,'').trim();
+    return {mentioned, body};
+  },
   addWorld(){
     const w=emptyWorld();
     this.state.worlds.push(w); this.save(); return w;
@@ -524,7 +593,9 @@ const Store = {
       sidekick:null, npc:null
     };
     w.chats=[{id:uid(), title:'初次相遇', messages:[]}];
-    this.state.worlds.push(w); this.save(); UI.renderSidebar(); toast('已套用预设：'+p.name);
+    this.state.worlds.push(w);
+    this.state.currentWorldId=w.id; this.state.currentChatId=w.chats[0].id; this.state.expandedWorldId=w.id;
+    this.save(); UI.renderSidebar(); UI.renderMain(); toast('已套用预设：'+p.name);
   }
 };
 
@@ -691,7 +762,7 @@ const UI = {
           <button class="tool-btn" id="topExport" title="导出聊天记录">📤</button>
         </div>
       </div>
-      <div class="chat-area ${w.visual?.bgType==='image'?'with-bg':''}" id="chatArea" style="${bgStyle}"></div>
+      <div class="chat-area ${w.visual?.bgType==='image'&&w.visual.bgValue?'with-bg':''}" id="chatArea" style="${bgStyle}"></div>
       <div class="input-bar">
         <div id="simulateHint" style="font-size:11px;color:var(--warn);padding:0 4px 4px;display:none;">⚠️ 未配置 API Key，当前使用内置模拟回复</div>
         <div class="input-tools">
@@ -701,8 +772,9 @@ const UI = {
           <button class="tool-btn" id="btnUpload" title="上传附件">📎 附件</button>
         </div>
         <div class="input-row">
-          <textarea id="msgInput" rows="1" placeholder="请在这里输入文字…（Enter 发送）"></textarea>
+          <textarea id="msgInput" rows="1" placeholder="输入消息…（Enter 发送，Shift+Enter 换行，@角色名 可指定回复对象）"></textarea>
           <button class="send-btn" id="sendBtn">➤</button>
+          <button class="stop-btn" id="stopBtn" title="停止生成" style="display:none;">■</button>
         </div>
       </div>`;
 
@@ -739,7 +811,7 @@ const UI = {
       const privateNote = m.private ? `<span class="sys-badge">仅宿主可见</span>` : '';
 
       html+=`
-        <div class="msg-row ${me?'me':''}">
+        <div class="msg-row ${me?'me':''}" data-mid="${m.id}">
           <div class="avatar" style="background:${me?(w.characters.host?.color||'var(--primary)'):(getChar(m.pid)?.color||'#999')}">
             ${me ? defaultAvatarText(w.characters.host?.name||'我') : (getChar(m.pid)?.emoji||defaultAvatarText(getChar(m.pid)?.name||'?'))}
           </div>
@@ -749,7 +821,7 @@ const UI = {
               ${privateNote}
               <span>${time}</span>
             </div>
-            <div class="bubble ${m.typing?'typing':''}">${esc(m.text)}</div>
+            <div class="bubble msg-bubble-selectable ${m.typing?'typing':''}">${esc(m.text)}</div>
             <div class="msg-actions ${me?'me-actions':''}">
               ${me?'':`<span data-act="regen" data-mid="${m.id}">🔄 重新生成</span>`}
               <span data-act="edit" data-mid="${m.id}">✎ 修改</span>
@@ -790,14 +862,22 @@ const UI = {
       if(UI.isGenerating) return;
       const chat=Store.getCurrentChat();
       const isDim = Store.state.sendMode==='dimension';
-      let targetPid=null, body=text;
-      const at=text.match(/^@(\S+)\s*/);
-      if(at){ const nm=at[1]; const part=Store.getChatParticipants(w).find(p=>p.name===nm||p.role===nm); if(part)targetPid=part.pid; body=text.slice(at[0].length); }
+      // ① 解析 @提及（支持群像成员），body 为去除 @片段后的正文
+      const {mentioned, body}=Store.parseMentions(text, w);
+      const mentionPids=mentioned.map(m=>m.pid);
 
       chat.messages.push({ id:uid(), from:'me', pid:'host', name:w.characters.host?.name||'我', text:body, time:Date.now(), private:isDim });
-      ta.value=''; Store.save(); this.renderMessages();
-      this.simulateReply(w,chat,false,targetPid,isDim);
+      ta.value=''; autoSize(); Store.save(); this.renderMessages();
+      this.simulateReply(w,chat,false,mentionPids,isDim);
     };
+    // Enter 发送，Shift+Enter 换行（移动端回车键亦生效）
+    ta.addEventListener('keydown', e=>{
+      if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); doSend(); }
+    });
+    // textarea 随内容自适应高度
+    const autoSize=()=>{ ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,120)+'px'; };
+    ta.addEventListener('input', autoSize);
+    autoSize();
     send.onclick=doSend;
     if(window.visualViewport){
         window.visualViewport.addEventListener('resize', ()=>{
@@ -805,6 +885,10 @@ const UI = {
             if(chatArea) chatArea.scrollTop = chatArea.scrollHeight;
         });
     }
+    // 「停止生成」：中止正在进行的请求 + 移除正在输入气泡
+    const stopBtn=$('#stopBtn');
+    if(stopBtn){ stopBtn.onclick=()=>UI.cancelGenerate(w); }
+
     // 键盘弹出时自动滚动到输入框
     window.addEventListener('focusin', ()=>{
         setTimeout(()=>{
@@ -826,15 +910,25 @@ const UI = {
     const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${w.name}-${chat.title}.txt`;
+    a.download = (w.name||'世界') + '-' + (chat.title||'对话') + '.txt';
     a.click();
     toast('对话已导出');
   },
 
+  _abortCtrl:null,
+  cancelGenerate(w){
+    if(this._abortCtrl){ try{ this._abortCtrl.abort(); }catch(e){} this._abortCtrl=null; }
+    const chat=Store.getCurrentChat();
+    if(chat){ chat.messages=chat.messages.filter(m=>!m.typing); }
+    UI.isGenerating=false;
+    const sendBtn=$('#sendBtn'), stopBtn=$('#stopBtn');
+    if(sendBtn) sendBtn.style.display='';
+    if(stopBtn) stopBtn.style.display='none';
+    this.renderMessages();
+    toast('已停止生成');
+  },
   simulateReply(w, chat, regen, forcedTarget, isDim){
     const participants=Store.getChatParticipants(w);
-    
-    // 防止重复生成
     if(UI.isGenerating) return;
     UI.isGenerating = true;
     const sendBtn = $('#sendBtn');
@@ -851,47 +945,122 @@ const UI = {
       }
     }
 
-    let responder=null;
+    /* ===== ① 确定响应者列表（支持群像多角色独立回复） =====
+       - forcedTarget：传统单 pid（兼容旧逻辑）
+       - 否则扫描最后一条玩家消息中的 @提及 / 角色名，命中多个则逐角色回复 */
+    let responders=[];
+    // 始终解析最后一条玩家消息的 @提及，供分支复用 & 群像独立人格对齐
+    const lastMe=([...chat.messages].reverse().find(m=>m.from==='me'));
+    const _scanText=lastMe?lastMe.text:'';
+    const {mentioned}=Store.parseMentions(_scanText, w);
     if(isDim){
-      responder=participants.find(p=>p.pid==='system') || participants[1];
+      const sys=participants.find(p=>p.pid==='system') || participants[1];
+      responders=[sys].filter(Boolean);
     } else if(forcedTarget){
-      responder=participants.find(p=>p.pid===forcedTarget);
+      const pids=Array.isArray(forcedTarget)?forcedTarget:[forcedTarget];
+      pids.forEach(pid=>{ const r=participants.find(p=>p.pid===pid); if(r&&!responders.includes(r))responders.push(r); });
     } else {
-      const candidates=participants.filter(p=>!p.isHost && !p.isSystem);
-      responder = (w.characters.target && Math.random()<0.6) ? participants.find(p=>p.pid==='target')
-                 : (candidates[Math.floor(Math.random()*candidates.length)] || participants[1]);
-    }
-    if(!responder)responder=participants[1]||participants[0];
-
-    const typingMsg={id:uid(), from:responder.pid, pid:responder.pid, name:responder.name, text:'正在输入…', typing:true, private:isDim, time:Date.now()};
-    chat.messages.push(typingMsg); Store.save(); this.renderMessages();
-
-    const finish=(text)=>{
-      chat.messages=chat.messages.filter(m=>m.id!==typingMsg.id);
-      chat.messages.push({id:uid(), from:responder.pid, pid:responder.pid, name:responder.name, text:text||'(无回复)', time:Date.now(), private:isDim});
-      Store.save(); this.renderMessages();
-      UI.isGenerating = false;
-      if(sendBtn) sendBtn.classList.remove('disabled');
-    };
-
-    const sysPrompt=API.buildPrompt(w,chat,responder.pid);
-    const history=[{role:'system', content:sysPrompt}];
-    (chat.messages.filter(m=>!m.typing).slice(-12)).forEach(m=>{
-      const who=m.from==='me'?'user':'assistant';
-      history.push({role:who, content:(m.private?'[仅宿主可见] ':'')+m.text});
-    });
-
-    API.call(w,history).then(res=>{
-      if(res!=null) finish(res);
-      else {
-        setTimeout(()=>{
-          const arr={system:['🎴 任务已记录，继续推进吧。','🎴 检测到关键抉择点，请谨慎。','🎴 提示：好感度发生变动。'],target:['……','哼，别以为我会轻易相信你。','（别过脸）随你吧。','谢谢你，刚才那一下。'],sidekick:['老大！那边有情况！','交给我吧~','嘿嘿，我就知道你靠谱！'],npc:['欢迎光临~','这年头，活着就不容易啊…','听说城东最近不太平……']}[responder.pid]||['……'];
-          finish(arr[Math.floor(Math.random()*arr.length)]);
-        }, 800+Math.random()*600);
+      if(mentioned.length){
+        mentioned.forEach(mt=>{
+          const r=participants.find(p=>p.pid===mt.pid);
+          if(r && !responders.includes(r)) responders.push(r);
+        });
       }
-    }).catch(()=>{
-        finish('（网络错误，请检查API配置）');
+      // 无 @ 时：若某角色名被正文提及，也触发其回复（增强沉浸）
+      if(!responders.length){
+        const mentionedNames=Store.getAllMentionable(w).filter(m=>_scanText.includes(m.name) && m.pid!=='host');
+        mentionedNames.forEach(mt=>{ const r=participants.find(p=>p.pid===mt.pid); if(r&&!responders.includes(r))responders.push(r); });
+      }
+      // 仍无命中：走原随机策略
+      if(!responders.length){
+        const candidates=participants.filter(p=>!p.isHost && !p.isSystem);
+        const pick=(w.characters.target && Math.random()<0.6)? participants.find(p=>p.pid==='target')
+                   : (candidates[Math.floor(Math.random()*candidates.length)] || participants[1]);
+        if(pick) responders=[pick];
+      }
+    }
+    if(!responders.length) responders=[participants[1]||participants[0]].filter(Boolean);
+
+    /* 为每个响应者生成一条独立气泡（流式共用一个 AbortController） */
+    // 把 @提及 的成员与 responders 索引对齐，供群像独立人格使用
+    const mentionedForSlot=responders.map(r=>mentioned.find(m=>m.pid===r.pid));
+    this._abortCtrl=new AbortController();
+    if(sendBtn) sendBtn.style.display='none';
+    const stopBtn=$('#stopBtn'); if(stopBtn) stopBtn.style.display='flex';
+
+    let pending=responders.length;
+    const finalizeOne=()=>{ if(--pending<=0){ UI.isGenerating=false; UI._abortCtrl=null; const s=$('#sendBtn'); if(s){s.classList.remove('disabled');s.style.display='';} const st=$('#stopBtn'); if(st)st.style.display='none'; } };
+
+    responders.forEach((responder, idx)=>{
+      // 解析该槽位下被 @ 的具体群像成员（多成员世界时给出独立人格）
+      const slotMembers=Store.parseRoleMembers({name:responder.name, desc:responder.desc});
+      const mention=mentionedForSlot && mentionedForSlot[idx];
+      const member=mention ? slotMembers.find(m=>m.key===mention.memberKey) : slotMembers[0];
+      const authorName=(member && slotMembers.length>1 && mention) ? mention.name : responder.name;
+      const authorDesc=(member && member.desc) ? `${responder.desc}\n（当前出场的「${member.name}」：${member.desc}）` : responder.desc;
+
+      const sysPrompt=API.buildPrompt(w,chat,responder.pid, authorName, authorDesc);
+      const history=[{role:'system', content:sysPrompt}];
+      (chat.messages.filter(m=>!m.typing).slice(-12)).forEach(m=>{
+        const who=m.from==='me'?'user':'assistant';
+        history.push({role:who, content:(m.private?'[仅宿主可见] ':'')+m.text});
+      });
+
+      // 给同一轮多个回复加轻微错开，呈现"群像先后回应"感
+      const typingMsg={id:uid(), from:responder.pid, pid:responder.pid, name:authorName, text:'正在输入…', typing:true, private:isDim, time:Date.now()};
+      chat.messages.push(typingMsg); Store.save(); this.renderMessages();
+
+      const finish=(text)=>{
+        chat.messages=chat.messages.filter(m=>m.id!==typingMsg.id);
+        chat.messages.push({id:uid(), from:responder.pid, pid:responder.pid, name:authorName, text:text||'(无回复)', time:Date.now(), private:isDim});
+        Store.save(); this.renderMessages();
+      };
+
+      // 流式：把增量实时写入该气泡
+      const onDelta=(delta, full)=>{
+        const node=$('.msg-row[data-mid="'+typingMsg.id+'"] .bubble', $('#chatArea'));
+        if(node){ node.textContent=full; node.classList.remove('typing'); this._scrollChat(); }
+      };
+
+      setTimeout(()=>{
+        API.call(w,history,this._abortCtrl.signal, onDelta).then(res=>{
+          if(res!=null) finish(res);
+          else {
+            setTimeout(()=>finish(this._mockReply(w, responder, authorName, isDim)), 600+Math.random()*500);
+          }
+        }).catch(err=>{
+          if(err?.name==='AbortError'){ finalizeOne(); return; }
+          finish('（网络错误，请检查API配置）');
+          finalizeOne();
+        }).finally(()=>{ finalizeOne(); });
+      }, idx*350);
     });
+  },
+
+  /* 模拟回复台词池（API 未配置 / 请求失败时的兜底）。
+     按角色 pid 分池；群像多成员（同 pid、不同 memberKey）各自再独立分池，
+     保证一轮 @群像 中每个成员都拿到属于自己的独立台词，且同一池内不连续重复。 */
+  _mockReply(w, responder, authorName, isDim){
+    const pid=responder.pid;
+    if(isDim) return '🎴 ' + (['任务已记录，继续推进吧。','检测到关键抉择点，请谨慎。','提示：好感度发生变动。'][Math.floor(Math.random()*3)]);
+    const POOLS={
+      target:['……','哼，别以为我会轻易相信你。','（别过脸）随你吧。','谢谢你，刚才那一下。','（抬眼）你又想说什么？'],
+      sidekick:['老大！那边有情况！','交给我吧~','嘿嘿，我就知道你靠谱！','包在我身上！','这事我熟，跟我来。'],
+      npc:['欢迎光临~','这年头，活着就不容易啊…','听说城东最近不太平……','客官您要来点什么？','唉，命苦啊。'],
+      system:['🎴 任务已记录。','🎴 关键抉择点已标记。','🎴 好感度发生变动。'],
+    };
+    const pool=POOLS[pid] || ['……','（沉默片刻）','（点头）','（注视着你）'];
+    // 用 memberKey 区分群像成员；状态挂在 world 上，避免跨轮污染
+    const key=`_mockIdx_${pid}_${authorName||responder.name}`;
+    const used=w[key]||0;
+    let i=Math.floor(Math.random()*pool.length);
+    if(pool.length>1){ while(i===used) i=(i+1)%pool.length; }  // 不与上次重复
+    w[key]=i;
+    return pool[i];
+  },
+
+  _scrollChat(){
+    const area=$('#chatArea'); if(area) area.scrollTop=area.scrollHeight;
   },
 };
 
@@ -984,7 +1153,8 @@ const Modals = {
 
       $$('.module-card',body).forEach(card=>card.onclick=e=>{
         if(e.target.closest('.enable-switch'))return;
-        activeSub=card.dataset.goto;
+        // 「故事线」复用基础设定页（该页已包含 名称/世界观/故事线 全部必填项），避免分页保存时字段丢失
+        activeSub = card.dataset.goto==='story' ? 'basic' : card.dataset.goto;
         renderSub(activeSub);
       });
       $$('[data-toggle]',body).forEach(sw=>sw.onclick=e=>{
@@ -1055,7 +1225,9 @@ const Modals = {
             <input data-f="tags" value="${esc(w.tags)}" placeholder="标签，如：现代,ABO,甜宠">
           </div></div>
         <div class="field"><label>📜 世界观设定 <span class="req">*</span> <span class="tip">整个游玩的背景，越详细 AI 越稳定</span></label>
-          <textarea data-f="world" placeholder="详细描述这个世界的背景规则、社会结构、特殊设定等…">${esc(w.world)}</textarea></div>`;
+          <textarea data-f="world" placeholder="详细描述这个世界的背景规则、社会结构、特殊设定等…">${esc(w.world)}</textarea></div>
+        <div class="field"><label>📖 故事线 <span class="req">*</span> <span class="tip">整个事件发展的重要走向</span></label>
+          <textarea data-f="story" placeholder="分阶段描述主线：&#10;阶段一：……&#10;阶段二：……&#10;结局：……">${esc(w.story)}</textarea></div>`;
 
       case 'dimension': return `
         <div class="field"><label>🎴 位面系统 <span class="tip">可选。给宿主下发任务、传达信息，仅宿主可见</span></label>
@@ -1428,49 +1600,183 @@ const Modals = {
 Store.Modals=Modals;
 
 const API = {
-  async call(world, messagesHistory){
+  /* ② 流式 + 重试配置 */
+  streamEnabled:true,      // 是否尝试 SSE 流式（OpenAI / Anthropic 兼容）
+  maxRetries:2,            // 最大重试次数（共 1+2=3 次）
+  retryBaseMs:600,         // 指数退避基数
+  timeoutMs:60000,         // 单次请求超时（流式生成较长，默认 60s）
+
+  /* 把 messagesHistory 归一为 {system, messages}。
+     - OpenAI 兼容：system 并入 messages 首项（role=system）
+     - Anthropic：system 单独字段；assistant/user 二值化
+     - Google：assistant→model */
+  _normalize(prov, messagesHistory){
+    const sys=messagesHistory.find(m=>m.role==='system')?.content || '';
+    if(prov==='anthropic'){
+      const messages=messagesHistory.filter(m=>m.role!=='system').map(m=>({
+        role:m.role==='assistant'?'assistant':'user', content:m.content
+      }));
+      return {system:sys, messages};
+    }
+    if(prov==='google'){
+      const contents=messagesHistory.filter(m=>m.role!=='system').map(m=>({
+        role:m.role==='assistant'?'model':'user', parts:[{text:m.content}]
+      }));
+      return {system:sys, messages:contents};
+    }
+    // OpenAI 兼容：把 system 作为首位消息（若原本没有则补上）
+    const messages=messagesHistory.map(m=>({role:m.role, content:m.content}));
+    if(sys && (!messages.length || messages[0].role!=='system')){
+      messages.unshift({role:'system', content:sys});
+    }
+    return {system:sys, messages};
+  },
+
+  _headers(prov, key){
+    if(prov==='anthropic') return {'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01'};
+    return {'Content-Type':'application/json','Authorization':'Bearer '+key};
+  },
+
+  _url(prov, base, model){
+    if(prov==='anthropic') return (base||'https://api.anthropic.com')+'/v1/messages';
+    if(prov==='google') return `${(base||'https://generativelanguage.googleapis.com/v1beta')}/models/${model||'gemini-1.5-flash'}:generateContent`;
+    return (base||'https://api.openai.com/v1')+'/chat/completions';
+  },
+
+  _body(prov, model, messages, system, stream){
+    if(prov==='anthropic'){
+      const b={model:model||'claude-3-5-sonnet-latest', messages, max_tokens:1500, stream:!!stream};
+      if(system) b.system=system;
+      return b;
+    }
+    if(prov==='google'){
+      const b={contents:messages};
+      if(stream) b.alt='sse';   // Gemini 流式开关
+      return b;
+    }
+    // OpenAI 兼容
+    const b={model, messages, temperature:0.9};
+    if(stream) b.stream=true;
+    return b;
+  },
+
+  /* 单次请求：返回完整文本；若传 onDelta 且支持流式则返回流式聚合文本。
+     signal 支持中止（外部 AbortController + 内部超时二者任一触发即中止）。 */
+  async _requestOnce(world, messagesHistory, signal, onDelta){
     const cfg=world.api||{};
     const ga=Store.state.globalApi||{};
     const prov=cfg.provider||'openai';
     const key=cfg.apiKey || ga[prov]?.apiKey;
     const base=cfg.baseUrl || ga[prov]?.baseUrl;
     const model=cfg.model || 'gpt-4o-mini';
-    if(!key){ return null; }
-    
-    const controller = new AbortController();
-    const timeout = setTimeout(()=>controller.abort(), 15000);
-    
+    if(!key) return null;
+
+    const {system, messages}=this._normalize(prov, messagesHistory);
+    const useStream = this.streamEnabled && !!onDelta && prov!=='google';  // Gemini SSE 解析差异大，走非流式兜底
+    const controller=new AbortController();
+    const onAbort=()=>controller.abort();
+    signal?.addEventListener('abort', onAbort);
+    const timeout=setTimeout(()=>controller.abort(), this.timeoutMs);
+
     try{
-      if(prov==='openai'||prov==='deepseek'||prov==='zhipu'||prov==='moonshot'||prov==='local'){
-        const url=(base||'https://api.openai.com/v1')+'/chat/completions';
-        const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json', 'Authorization':'Bearer '+key},body:JSON.stringify({model, messages:messagesHistory, temperature:0.9}), signal: controller.signal});
-        const j=await res.json();
-        return j.choices?.[0]?.message?.content || '(模型返回为空)';
+      const url=this._url(prov, base, model);
+      const init={method:'POST', headers:this._headers(prov, key), body:JSON.stringify(this._body(prov, model, messages, system, useStream)), signal:controller.signal};
+      const res=await fetch(url, init);
+      if(!res.ok){
+        let detail='';
+        try{ const t=await res.text(); detail=' · '+t.slice(0,200); }catch(e){}
+        throw new Error(`HTTP ${res.status}${detail}`);
       }
-      if(prov==='anthropic'){
-        const url=(base||'https://api.anthropic.com')+'/v1/messages';
-        const msgs=messagesHistory.filter(m=>m.role!=='system').map(m=>({role:m.role==='assistant'?'assistant':'user', content:m.content}));
-        const sys=messagesHistory.find(m=>m.role==='system')?.content;
-        const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01'},body:JSON.stringify({model:model||'claude-3-5-sonnet-latest', system:sys, messages:msgs, max_tokens:1000}), signal: controller.signal});
-        const j=await res.json();
-        return j.content?.[0]?.text || '(模型返回为空)';
+
+      // —— 流式分支（OpenAI 兼容 / Anthropic）——
+      if(useStream && res.body && res.body.getReader){
+        return await this._readSSE(res, prov, onDelta);
       }
-      if(prov==='google'){
-        const url=`${(base||'https://generativelanguage.googleapis.com/v1beta')}/models/${model||'gemini-1.5-flash'}:generateContent?key=${key}`;
-        const parts=messagesHistory.map(m=>({role:m.role==='assistant'?'model':'user', parts:[{text:m.content}]}));
-        const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:parts}), signal: controller.signal});
-        const j=await res.json();
-        return j.candidates?.[0]?.content?.parts?.[0]?.text || '(模型返回为空)';
-      }
-    }catch(err){
-      console.warn('API 调用失败，回退模拟：',err);
-      if(err.name==='AbortError') toast('请求超时，已切换模拟回复');
-      return null;
+
+      // —— 非流式分支：统一从 JSON 抽取文本 ——
+      const j=await res.json();
+      if(prov==='anthropic') return j.content?.[0]?.text || '(模型返回为空)';
+      if(prov==='google') return j.candidates?.[0]?.content?.parts?.[0]?.text || '(模型返回为空)';
+      return j.choices?.[0]?.message?.content || '(模型返回为空)';
     } finally {
+      signal?.removeEventListener('abort', onAbort);
       clearTimeout(timeout);
     }
   },
-  buildPrompt(world, chat, responderPid){
+
+  /* 健壮的 SSE 解析器：按 \n\n 切分消息、保留不完整缓冲；
+     兼容 OpenAI（data: [DONE] / delta.content）与 Anthropic（event: + delta.text）双协议。 */
+  async _readSSE(res, prov, onDelta){
+    const reader=res.body.getReader();
+    const decoder=new TextDecoder();
+    let buf='', full='', done=false;
+    const feed=(eventName, dataLine)=>{
+      // 只关心 message / content_block_delta 等携带文本的事件；跳过 ping/message_start 等
+      if(eventName && eventName!=='message' && eventName!=='content_block_delta'){
+        if(eventName==='error'){ throw new Error('SSE error: '+(dataLine||'').slice(0,200)); }
+        return;
+      }
+      const data=dataLine.trim();
+      if(!data || data==='[DONE]'){ if(data==='[DONE]')done=true; return; }
+      let j; try{ j=JSON.parse(data); }catch(e){ return; }  // 非 JSON 心跳/注释忽略
+      let delta=null;
+      if(prov==='anthropic'){
+        // content_block_delta → delta.text
+        delta=j.delta?.text || j.delta?.partial_json || null;
+      } else {
+        // OpenAI 兼容：choices[0].delta.content；末尾 usage 块的 choices 可能为空，需容错
+        delta=j.choices?.[0]?.delta?.content || null;
+      }
+      if(delta){ full+=delta; onDelta(delta, full); }
+    };
+
+    while(!done){
+      const {value, done:d}=await reader.read(); done=d;
+      if(value) buf+=decoder.decode(value,{stream:true});
+      // 按 \n\n 拆消息；末尾不完整的一段留在 buf
+      let sep;
+      while((sep=buf.indexOf('\n\n'))>=0){
+        const raw=buf.slice(0,sep); buf=buf.slice(sep+2);
+        let eventName='', dataLines=[];
+        raw.split(/\r?\n/).forEach(line=>{
+          if(line.startsWith(':')) return;                 // SSE 注释行（如 :keep-alive）
+          if(line.startsWith('event:')) eventName=line.slice(6).trim();
+          else if(line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
+        });
+        feed(eventName, dataLines.join('\n'));
+        if(done) break;
+      }
+    }
+    // 流结束时若 buf 残留最后一段（不以 \n\n 结尾），再解析一次
+    if(buf.trim()){ let eventName='', dataLines=[];
+      buf.trim().split(/\r?\n/).forEach(line=>{ if(line.startsWith('event:'))eventName=line.slice(6).trim(); else if(line.startsWith('data:'))dataLines.push(line.slice(5).trimStart()); });
+      feed(eventName, dataLines.join('\n'));
+    }
+    return full || '(模型返回为空)';
+  },
+
+  /* 对外入口：带指数退避重试。onDelta 用于流式增量。 */
+  async call(world, messagesHistory, signal, onDelta){
+    let lastErr=null;
+    for(let attempt=0; attempt<=this.maxRetries; attempt++){
+      try{
+        const text=await this._requestOnce(world, messagesHistory, signal, onDelta);
+        if(text!=null) return text;       // null = 无 key，直接走模拟，不重试
+        return null;
+      }catch(err){
+        lastErr=err;
+        if(err?.name==='AbortError'){ throw err; }   // 用户主动中止，立即上抛
+        if(attempt<this.maxRetries){
+          const wait=this.retryBaseMs*(2**attempt)+Math.random()*200;
+          toast(`请求失败，${Math.round(wait)}ms 后重试（${attempt+1}/${this.maxRetries}）`);
+          await new Promise(r=>setTimeout(r,wait));
+        }
+      }
+    }
+    console.warn('API 多次重试失败：',lastErr);
+    return null;   // 重试耗尽 → 回退模拟回复
+  },
+  buildPrompt(world, chat, responderPid, authorName, authorDesc){
     const lines=[];
     lines.push(`你是「${world.name}」中的角色扮演 AI。以下是世界观与设定，请严格遵守：`);
     lines.push(`【世界观】\n${world.world}`);
@@ -1483,7 +1789,9 @@ const API = {
       else lines.push(`【角色 ${p.name}（${p.role||''}）】${p.desc||''}`);
     });
     const resp=part.find(p=>p.pid===responderPid);
-    lines.push(`\n当前你要扮演的角色是：${resp?.name}（${resp?.role||''}）。请完全代入该角色，用符合其性格、身份、说话风格的第一人称回复。不要跳出角色，不要以系统或旁白口吻。回复简洁（1-4 句），可含动作描写。如果收到"重新生成"指令则重新组织语言。`);
+    const useName=authorName||resp?.name;
+    const useDesc=authorDesc||resp?.desc;
+    lines.push(`\n当前你要扮演的角色是：${useName}（${resp?.role||''}）。角色设定：${useDesc||'（见上文）'}\n请完全代入该角色，用符合其性格、身份、说话风格的第一人称回复。不要跳出角色，不要以系统或旁白口吻。回复简洁（1-4 句），可含动作描写。如果收到"重新生成"指令则重新组织语言。`);
     return lines.join('\n\n');
   }
 };
@@ -1509,15 +1817,13 @@ function init(){
   UI.renderSidebar();
   UI.renderMain();
 
-  $('#scrim').onclick=()=>{
-    UI.closeMobile();
-    Store.state.currentWorldId=null;
-    Store.state.currentChatId=null;
-    Store.state.expandedWorldId=null;
-    Store.save();
-    UI.renderSidebar();
-    UI.renderMain();
-  };
+  // 首次进入且无任何世界时，引导用户创作
+  if(!Store.state.worlds.length){
+    setTimeout(()=>toast('👋 欢迎来到秘卡RPG，点击「🪄 创作新世界」开始'), 400);
+  }
+
+  // 遮罩仅用于关闭移动端侧栏；不再清空当前选中的世界
+  $('#scrim').onclick=()=>{ UI.closeMobile(); };
 
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'){ Modals.close(); }
